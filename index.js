@@ -305,7 +305,9 @@ module.exports = class Omega extends EventEmitter {
   }
 
   registerExtension (name, handlers) {
-   return this.extensions.add(name, handlers)
+    const ext = this.extensions.add(name, handlers)
+    this.replicator.broadcastOptions()
+    return ext
   }
 }
 
