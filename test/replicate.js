@@ -98,7 +98,7 @@ tape('update with zero length', async function (t) {
 
   replicate(a, b)
 
-  await b.update() // hangs
+  await b.update() // should not hang
   t.same(b.length, 0)
 
   t.end()
