@@ -1,6 +1,8 @@
 const { EventEmitter } = require('events')
 const raf = require('random-access-file')
 const crypto = require('hypercore-crypto')
+const codecs = require('codecs')
+
 const MerkleTree = require('./lib/merkle-tree')
 const BlockStore = require('./lib/block-store')
 const Bitfield = require('./lib/bitfield')
@@ -186,10 +188,17 @@ module.exports = class Omega extends EventEmitter {
   async get (index, opts) {
     if (this.opened === false) await this.opening
 
-    if (this.bitfield.get(index)) return this.blocks.get(index)
-    if (opts && opts.onwait) opts.onwait(index)
+    let block = null
+    if (this.bitfield.get(index)) {
+      block = await this.blocks.get(index)
+    } else {
+      if (opts && opts.onwait) opts.onwait(index)
+      block = await this.replicator.requestBlock(index)
+    }
 
-    return this.replicator.requestBlock(index)
+    if (opts && opts.valueEncoding) block = codecs(opts.valueEncoding).decode(block)
+
+    return block
   }
 
   download (range) {
