@@ -7,8 +7,8 @@ const MerkleTree = require('./lib/merkle-tree')
 const BlockStore = require('./lib/block-store')
 const Bitfield = require('./lib/bitfield')
 const Replicator = require('./lib/replicator')
-const Info = require('./lib/info')
 const Extension = require('./lib/extension')
+const { InfoStorage } = require('./lib/info')
 
 const promises = Symbol.for('hypercore.promises')
 const inspect = Symbol.for('nodejs.util.inspect.custom')
@@ -165,7 +165,8 @@ module.exports = class Omega extends EventEmitter {
   async ready () {
     if (this.opening) return this.opening
 
-    this.info = await Info.open(this.storage('info'))
+    this.infoStorage = await InfoStorage.open(this.storage('info'))
+    this.info = this.infoStorage.info
 
     // TODO: move to info.keygen or something?
     if (!this.info.publicKey) {
@@ -177,7 +178,7 @@ module.exports = class Omega extends EventEmitter {
         this.info.publicKey = this.key = keys.publicKey
         this.info.secretKey = keys.secretKey
       }
-      await this.info.flush()
+      await this.infoStorage.flush()
     } else {
       this.key = this.info.publicKey
     }
@@ -256,8 +257,8 @@ module.exports = class Omega extends EventEmitter {
     }
 
     await this.tree.flush()
-    await this.info.flush()
     await this.bitfield.flush()
+    await this.infoStorage.flush()
 
     this.replicator.broadcastInfo()
     this.emit('reorg', this.info.fork)
@@ -285,8 +286,8 @@ module.exports = class Omega extends EventEmitter {
     }
 
     await this.tree.flush()
-    await this.info.flush()
     await this.bitfield.flush()
+    await this.infoStorage.flush()
 
     this.replicator.broadcastInfo()
   }
@@ -325,7 +326,7 @@ module.exports = class Omega extends EventEmitter {
     }
 
     await this.bitfield.flush()
-    await this.info.flush()
+    await this.infoStorage.flush()
 
     // TODO: all these broadcasts should be one
     this.replicator.broadcastInfo()
