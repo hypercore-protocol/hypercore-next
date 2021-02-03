@@ -47,7 +47,10 @@ module.exports = class Omega extends EventEmitter {
     this.opening = opts._opening || this.ready()
     this.opening.catch(noop)
 
-    this._externalSecretKey = opts.secretKey || null
+    this.replicator.on('peer-add', peer => this.emit('peer-add', peer))
+    this.replicator.on('peer-remove', peer => this.emit('peer-remove', peer))
+
+    this._externalKeyPair = opts.keyPair || null
   }
 
   [inspect] (depth, opts) {
@@ -169,10 +172,14 @@ module.exports = class Omega extends EventEmitter {
     this.info = await Info.open(this.storage('info'))
 
     // TODO: move to info.keygen or something?
+    if (typeof this._externalKeyPair === 'function') {
+      this._externalKeyPair = await this._externalKeyPair()
+    }
     if (!this.info.publicKey) {
-      if (this.key) {
-        this.info.publicKey = this.key
-        this.info.secretKey = this._externalSecretKey
+      if (this.key || this._externalKeyPair) {
+        this.info.publicKey = this._externalKeyPair ? this._externalKeyPair.publicKey : this.key
+        this.info.secretKey = this._externalKeyPair ? this._externalKeyPair.secretKey : null
+        this.key = this.info.publicKey
       } else {
         const keys = this.crypto.keyPair()
         this.info.publicKey = this.key = keys.publicKey
