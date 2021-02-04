@@ -47,9 +47,6 @@ module.exports = class Omega extends EventEmitter {
     this.opening = opts._opening || this.ready()
     this.opening.catch(noop)
 
-    this.replicator.on('peer-add', peer => this.emit('peer-add', peer))
-    this.replicator.on('peer-remove', peer => this.emit('peer-remove', peer))
-
     this._externalKeyPair = opts.keyPair || null
   }
 
