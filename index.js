@@ -177,10 +177,12 @@ module.exports = class Omega extends EventEmitter {
       secretKey = this.options.keyPair.secretKey
     }
 
-    this.info = await Info.open(this.storage('info'))
+    this.info = await Info.open(this.storage('info'), {
+      secretKey
+    })
 
     const { fork } = this.info
-    secretKey = secretKey || this.info.secretKey
+    secretKey = this.info.secretKey
 
     // TODO: move to info.keygen or something?
     if (!this.info.publicKey) {
