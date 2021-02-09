@@ -170,20 +170,13 @@ module.exports = class Omega extends EventEmitter {
       this.options = { ...this.options, ...(await this.options.preload()) }
     }
 
-    let secretKey = null
-
-    if (this.options.keyPair) {
-      this.key = this.options.keyPair.publicKey
-      secretKey = this.options.keyPair.secretKey
-    }
-
     this.info = await Info.open(this.storage('info'), {
       crypto: this.crypto,
       publicKey: this.key,
-      secretKey
+      ...this.options.keyPair
     })
     this.key = this.info.publicKey
-    secretKey = this.info.secretKey
+    const secretKey = this.info.secretKey
     const fork = this.info.fork
 
     this.replicator = new Replicator(this)
