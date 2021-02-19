@@ -72,7 +72,7 @@ module.exports = class Omega extends EventEmitter {
   }
 
   session (opts) {
-    const Clz = (opts && opts.class) ? opts.class : Omega
+    const Clz = (opts && opts.class) || Omega
     const s = new Clz(this.storage, this.key, {
       valueEncoding: this.valueEncoding,
       extensions: this.extensions,
