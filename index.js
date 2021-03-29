@@ -40,7 +40,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.extensions = opts.extensions || new Extensions(this)
 
     this.sign = opts.sign || null
-    if (!this.sign && opts.keyPair && opts.keyPair.secretKey) {
+    if (this.sign === null && opts.keyPair && opts.keyPair.secretKey) {
       this.sign = defaultSign(this.crypto, opts.keyPair.secretKey)
     }
 
@@ -195,7 +195,7 @@ module.exports = class Hypercore extends EventEmitter {
 
     // TODO: If both a secretKey and a sign option are provided, sign takes precedence.
     // In the future we can try to determine if they're equivalent, and error otherwise.
-    if (secretKey && !this.sign) {
+    if (secretKey && this.sign === null) {
       this.sign = defaultSign(this.crypto, secretKey)
     }
 
@@ -252,7 +252,7 @@ module.exports = class Hypercore extends EventEmitter {
 
   async truncate (newLength = 0, fork = -1) {
     if (this.opened === false) await this.opening
-    if (!this.sign) throw new Error('Core is not writable')
+    if (this.sign === null) throw new Error('Core is not writable')
 
     const release = await this.lock()
     let oldLength = 0
@@ -290,7 +290,7 @@ module.exports = class Hypercore extends EventEmitter {
 
   async append (blocks) {
     if (this.opened === false) await this.opening
-    if (!this.sign) throw new Error('Core is not writable')
+    if (this.sign === null) throw new Error('Core is not writable')
     blocks = Array.isArray(blocks) ? blocks : [blocks]
 
     const release = await this.lock()
