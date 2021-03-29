@@ -64,5 +64,4 @@ tape('writable session with custom sign function', async function (t) {
 
   t.same(core.length, 1)
   t.end()
-
 })
