@@ -280,7 +280,9 @@ module.exports = class Hypercore extends EventEmitter {
       release()
     }
 
-    this.ontruncate(oldLength, newLength)
+    for (let i = 0; i < this.sessions.length; i++) {
+      this.sessions[i].emit('truncate')
+    }
     this.replicator.broadcastInfo()
 
     // Same note about background processing as below in append
@@ -337,7 +339,9 @@ module.exports = class Hypercore extends EventEmitter {
       release()
     }
 
-    this.onappend(oldLength, newLength)
+    for (let i = 0; i < this.sessions.length; i++) {
+      this.sessions[i].emit('append')
+    }
 
     // TODO: all these broadcasts should be one
     this.replicator.broadcastInfo()
@@ -362,18 +366,6 @@ module.exports = class Hypercore extends EventEmitter {
   // called by the extensions
   onextensionupdate () {
     if (this.replicator !== null) this.replicator.broadcastOptions()
-  }
-
-  ontruncate () {
-    for (let i = 0; i < this.sessions.length; i++) {
-      this.sessions[i].emit('truncate')
-    }
-  }
-
-  onappend () {
-    for (let i = 0; i < this.sessions.length; i++) {
-      this.sessions[i].emit('append')
-    }
   }
 
   // called by the replicator
