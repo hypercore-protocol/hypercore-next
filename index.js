@@ -73,12 +73,12 @@ module.exports = class Hypercore extends EventEmitter {
     return Replicator.createStream(...args)
   }
 
-  session (opts) {
-    const Clz = (opts && opts.class) || Hypercore
-    const keyPairSign = (opts && opts.keyPair && opts.keyPair.secretKey) ? defaultSign(this.crypto, opts.keyPair.secretKey) : null
+  session (opts = {}) {
+    const Clz = opts.class || Hypercore
+    const keyPairSign = (opts.keyPair && opts.keyPair.secretKey) ? defaultSign(this.crypto, opts.keyPair.secretKey) : null
     const s = new Clz(this.storage, this.key, {
       ...opts,
-      sign: (opts && opts.sign) || keyPairSign || this.sign,
+      sign: opts.sign || keyPairSign || this.sign,
       valueEncoding: this.valueEncoding,
       extensions: this.extensions,
       _opening: this.opening,
