@@ -37,8 +37,12 @@ module.exports = class Hypercore extends EventEmitter {
     this.bitfield = null
     this.info = null
     this.replicator = null
-    this.sign = opts.sign || null
     this.extensions = opts.extensions || new Extensions(this)
+
+    this.sign = opts.sign || null
+    if (!this.sign && opts.keyPair && opts.keyPair.secretKey) {
+      this.sign = defaultSign(this.crypto, opts.keyPair.secretKey)
+    }
 
     this.valueEncoding = opts.valueEncoding ? codecs(opts.valueEncoding) : null
     this.key = key || null
@@ -75,10 +79,9 @@ module.exports = class Hypercore extends EventEmitter {
 
   session (opts = {}) {
     const Clz = opts.class || Hypercore
-    const keyPairSign = (opts.keyPair && opts.keyPair.secretKey) ? defaultSign(this.crypto, opts.keyPair.secretKey) : null
     const s = new Clz(this.storage, this.key, {
       ...opts,
-      sign: opts.sign || keyPairSign || this.sign,
+      sign: opts.sign || this.sign,
       valueEncoding: this.valueEncoding,
       extensions: this.extensions,
       _opening: this.opening,
@@ -189,7 +192,12 @@ module.exports = class Hypercore extends EventEmitter {
     this.tree = await MerkleTree.open(this.storage('tree'), { crypto: this.crypto, fork })
     this.blocks = new BlockStore(this.storage('data'), this.tree)
     this.bitfield = await Bitfield.open(this.storage('bitfield'))
-    if (secretKey) this.sign = defaultSign(this.crypto, secretKey)
+
+    // TODO: If both a secretKey and a sign option are provided, sign takes precedence.
+    // In the future we can try to determine if they're equivalent, and error otherwise.
+    if (secretKey && !this.sign) {
+      this.sign = defaultSign(this.crypto, secretKey)
+    }
 
     this.discoveryKey = this.crypto.discoveryKey(this.key)
 
