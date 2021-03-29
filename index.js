@@ -242,7 +242,7 @@ module.exports = class Hypercore extends EventEmitter {
     range.destroy(null)
   }
 
-  async truncate (newLength, fork = -1) {
+  async truncate (newLength = 0, fork = -1) {
     if (this.opened === false) await this.opening
     if (!this.sign) throw new Error('Core is not writable')
 
