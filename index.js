@@ -41,7 +41,7 @@ module.exports = class Hypercore extends EventEmitter {
 
     this.sign = opts.sign || null
     if (this.sign === null && opts.keyPair && opts.keyPair.secretKey) {
-      this.sign = defaultSign(this.crypto, key || opts.keyPair.publicKey, opts.keyPair.secretKey)
+      this.sign = defaultSign(this.crypto, key, opts.keyPair.secretKey)
     }
 
     this.valueEncoding = opts.valueEncoding ? codecs(opts.valueEncoding) : null
