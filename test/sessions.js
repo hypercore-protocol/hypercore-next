@@ -73,7 +73,7 @@ tape('writable session with invalid keypair throws', async function (t) {
   const keyPair2 = crypto.keyPair()
 
   try {
-    const core = new Hypercore(ram, keyPair2.publicKey, { keyPair: { publicKey: keyPair2.publicKey } }) // Create a new core in read-only mode.
+    const core = new Hypercore(ram, keyPair2.publicKey) // Create a new core in read-only mode.
     core.session({ keyPair: keyPair1 })
     t.fail('invalid keypair did not throw')
   } catch {
