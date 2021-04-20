@@ -34,3 +34,15 @@ tape('session', async function (t) {
   t.same(await session.get(0), Buffer.from('test'))
   t.end()
 })
+
+tape('get beyond length throws immediately', async function (t) {
+  t.plan(1)
+
+  const core = await create()
+  try {
+    await core.get(10)
+    t.fail('should have thrown')
+  } catch {
+    t.pass('threw successfully')
+  }
+})
