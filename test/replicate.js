@@ -137,12 +137,10 @@ tape('invalid signature fails', async function (t) {
   const [s1, s2] = replicate(a, b)
 
   s1.on('error', (err) => {
-    console.log('S1 ERR:', err.message)
     t.ok(err, 'stream closed')
   })
 
   s2.on('error', (err) => {
-    console.log('S2 ERR:', err.message)
     t.same(err.message, 'Remote signature does not match')
   })
 
