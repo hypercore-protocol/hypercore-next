@@ -11,6 +11,7 @@ const Info = require('./lib/info')
 const Extensions = require('./lib/extensions')
 const mutexify = require('mutexify/promise')
 const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
+const NoiseSecretStream = require('noise-secret-stream')
 
 const promises = Symbol.for('hypercore.promises')
 const inspect = Symbol.for('nodejs.util.inspect.custom')
@@ -73,8 +74,14 @@ module.exports = class Hypercore extends EventEmitter {
       indent + ')'
   }
 
-  static createProtocolStream (...args) {
-    return Replicator.createStream(...args)
+  static createProtocolStream (isInitiator, opts) {
+    const noiseStream = new NoiseSecretStream(isInitiator, null, opts)
+    const rawStream = noiseStream.rawStream
+    rawStream.noiseStream = noiseStream // TODO: This should already be set
+    noiseStream.on('error', err => {
+      if (!rawStream.destroyed) rawStream.emit('error', err)
+    }) // TODO: noise-secret-stream should do this
+    return rawStream
   }
 
   session (opts = {}) {
@@ -135,19 +142,32 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   replicate (isInitiator, opts = {}) {
-    let stream = isStream(isInitiator)
+    let outerStream = isStream(isInitiator)
       ? isInitiator
       : opts.stream
+    let noiseStream = null
 
-    if (!stream) stream = Replicator.createStream(isInitiator)
-
-    if (this.opened) {
-      this.replicator.joinStream(stream)
+    if (outerStream) {
+      noiseStream = outerStream.noiseStream || outerStream
     } else {
-      this.opening.then(() => this.replicator.joinStream(stream), stream.destroy.bind(stream))
+      outerStream = Hypercore.createProtocolStream(isInitiator, opts)
+      noiseStream = outerStream.noiseStream
+    }
+    if (!noiseStream) throw new Error('Invalid stream passed to replicate')
+
+    if (!noiseStream.userData) {
+      const handler = Replicator.createProtocol(noiseStream)
+      noiseStream.userData = handler
     }
 
-    return stream
+    const protocol = noiseStream.userData
+    if (this.opened) {
+      this.replicator.joinProtocol(protocol)
+    } else {
+      this.opening.then(() => this.replicator.joinProtocol(protocol), protocol.destroy.bind(protocol))
+    }
+
+    return outerStream
   }
 
   get writable () {

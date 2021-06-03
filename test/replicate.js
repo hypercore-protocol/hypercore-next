@@ -1,4 +1,5 @@
 const tape = require('tape')
+const NoiseSecretStream = require('noise-secret-stream')
 const { create, replicate } = require('./helpers')
 
 tape('basic replication', async function (t) {
@@ -136,10 +137,12 @@ tape('invalid signature fails', async function (t) {
   const [s1, s2] = replicate(a, b)
 
   s1.on('error', (err) => {
+    console.log('S1 ERR:', err.message)
     t.ok(err, 'stream closed')
   })
 
   s2.on('error', (err) => {
+    console.log('S2 ERR:', err.message)
     t.same(err.message, 'Remote signature does not match')
   })
 
@@ -206,5 +209,28 @@ tape('async multiplexing', async function (t) {
   await new Promise(resolve => b2.once('peer-add', resolve))
 
   t.same(b2.peers.length, 1)
+  t.same(await b2.get(0), Buffer.from('ho'))
+})
+
+tape('multiplexing with external noise stream', async function (t) {
+  const a1 = await create()
+  const a2 = await create()
+
+  const b1 = await create(a1.key)
+  const b2 = await create(a2.key)
+
+  const n1 = new NoiseSecretStream(true)
+  const n2 = new NoiseSecretStream(false)
+  n1.rawStream.pipe(n2.rawStream).pipe(n1.rawStream)
+
+  a1.replicate(n1)
+  a2.replicate(n1)
+  b1.replicate(n2)
+  b2.replicate(n2)
+
+  await a1.append('hi')
+  t.same(await b1.get(0), Buffer.from('hi'))
+
+  await a2.append('ho')
   t.same(await b2.get(0), Buffer.from('ho'))
 })
