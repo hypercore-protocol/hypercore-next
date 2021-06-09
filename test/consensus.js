@@ -30,7 +30,7 @@ tape('anyone can write', async function (t) {
   await a.append(['a', 'b', 'c', 'd', 'e'])
 
   const b = await create(a.key, {
-    sign () { return Buffer.alloc(0) },  
+    sign () { return Buffer.alloc(0) },
     logic
   })
 
@@ -56,11 +56,10 @@ tape('anyone can write', async function (t) {
   t.end()
 })
 
-
 tape('proof of work', async function (t) {
   function sign (data) {
-    let sig = Buffer.alloc(16)
-    for (let i = 0;;) {
+    const sig = Buffer.alloc(16)
+    for (let i = 0; ;) {
       hash(sig, [data, Buffer.from((i++).toString(16), 'hex')])
       let test = 0
       for (let j = 0; j < 1; j++) test |= sig[j]
@@ -114,8 +113,8 @@ tape('proof of work', async function (t) {
 
 tape('proof of work fails', async function (t) {
   function sign (data) {
-    let sig = Buffer.alloc(16)
-    for (let i = 0;;) {
+    const sig = Buffer.alloc(16)
+    for (let i = 0; ;) {
       hash(sig, [data, Buffer.from((i++).toString(16), 'hex')])
       let test = 0
       for (let j = 0; j < 1; j++) test |= sig[j]
@@ -146,13 +145,12 @@ tape('proof of work fails', async function (t) {
     logic
   })
 
+  const fail = InvertedPromise()
 
-  const r = b.download({ start: 0, end: a.length })
-
-  fail = InvertedPromise()
   const [s1, s2] = replicate(a, b)
-  s1.on('error', err => {})
-  s2.on('error', (err) => {
+
+  s1.on('error', () => {})
+  s2.on('error', () => {
     t.pass('proof of work should fail')
     fail.resolve()
   })
