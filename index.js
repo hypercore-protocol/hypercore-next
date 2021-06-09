@@ -9,6 +9,7 @@ const Bitfield = require('./lib/bitfield')
 const Replicator = require('./lib/replicator')
 const Info = require('./lib/info')
 const Extensions = require('./lib/extensions')
+const HypercoreLogic = require('./lib/consensus')
 const mutexify = require('mutexify/promise')
 const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 const NoiseSecretStream = require('noise-secret-stream')
@@ -31,6 +32,8 @@ module.exports = class Hypercore extends EventEmitter {
     this.options = opts
 
     this.crypto = opts.crypto || defaultCrypto
+    this.logic = opts.logic || new HypercoreLogic(this)
+
     this.storage = defaultStorage(storage)
     this.lock = mutexify()
 
@@ -78,6 +81,10 @@ module.exports = class Hypercore extends EventEmitter {
   static createProtocolStream (isInitiator, opts) {
     const noiseStream = new NoiseSecretStream(isInitiator, null, opts)
     return noiseStream.rawStream
+  }
+
+  verificationInfo (length) {
+    return this.logic.verificationInfo(length)
   }
 
   session (opts = {}) {
@@ -206,7 +213,8 @@ module.exports = class Hypercore extends EventEmitter {
     const fork = this.info.fork
     const secretKey = this.info.secretKey
 
-    this.tree = await MerkleTree.open(this.storage('tree'), { crypto: this.crypto, fork })
+    const treeOpts = { crypto: this.crypto, fork }
+    this.tree = await MerkleTree.open(this.storage('tree'), treeOpts)
     this.blocks = new BlockStore(this.storage('data'), this.tree)
     this.bitfield = await Bitfield.open(this.storage('bitfield'))
 
