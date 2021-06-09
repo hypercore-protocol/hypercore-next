@@ -213,7 +213,7 @@ module.exports = class Hypercore extends EventEmitter {
     const fork = this.info.fork
     const secretKey = this.info.secretKey
 
-    const treeOpts = { crypto: this.crypto, fork }
+    const treeOpts = { crypto: this.crypto, fork, logic: this.logic }
     this.tree = await MerkleTree.open(this.storage('tree'), treeOpts)
     this.blocks = new BlockStore(this.storage('data'), this.tree)
     this.bitfield = await Bitfield.open(this.storage('bitfield'))
