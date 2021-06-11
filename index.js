@@ -30,7 +30,7 @@ module.exports = class Hypercore extends EventEmitter {
     this[promises] = true
     this.options = opts
 
-    this.crypto = crypto
+    this.crypto = opts.crypto || crypto
     this.storage = defaultStorage(storage)
     this.lock = mutexify()
 
