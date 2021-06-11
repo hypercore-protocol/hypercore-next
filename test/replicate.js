@@ -124,7 +124,7 @@ tape('high latency reorg', async function (t) {
   t.same(same, 80)
 })
 
-tape.only('invalid signature fails', async function (t) {
+tape('invalid signature fails', async function (t) {
   t.plan(2)
 
   const a = await create()
