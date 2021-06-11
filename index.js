@@ -76,12 +76,7 @@ module.exports = class Hypercore extends EventEmitter {
 
   static createProtocolStream (isInitiator, opts) {
     const noiseStream = new NoiseSecretStream(isInitiator, null, opts)
-    const rawStream = noiseStream.rawStream
-    rawStream.noiseStream = noiseStream // TODO: This should already be set
-    noiseStream.on('error', err => {
-      if (!rawStream.destroyed) rawStream.emit('error', err)
-    }) // TODO: noise-secret-stream should do this
-    return rawStream
+    return noiseStream.rawStream
   }
 
   session (opts = {}) {
@@ -148,7 +143,7 @@ module.exports = class Hypercore extends EventEmitter {
     let noiseStream = null
 
     if (outerStream) {
-      noiseStream = outerStream.noiseStream || outerStream
+      noiseStream = outerStream.noiseStream
     } else {
       outerStream = Hypercore.createProtocolStream(isInitiator, opts)
       noiseStream = outerStream.noiseStream
