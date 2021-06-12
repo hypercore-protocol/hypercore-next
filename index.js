@@ -2,7 +2,7 @@ const { EventEmitter } = require('events')
 const raf = require('random-access-file')
 const isOptions = require('is-options')
 const codecs = require('codecs')
-const crypto = require('hypercore-crypto')
+const defaultCrypto = require('hypercore-crypto')
 const MerkleTree = require('./lib/merkle-tree')
 const BlockStore = require('./lib/block-store')
 const Bitfield = require('./lib/bitfield')
@@ -28,7 +28,7 @@ module.exports = class Hypercore extends EventEmitter {
     this[promises] = true
     this.options = opts
 
-    this.crypto = opts.crypto || crypto
+    this.crypto = opts.crypto || defaultCrypto
     this.storage = defaultStorage(storage)
     this.lock = mutexify()
 
