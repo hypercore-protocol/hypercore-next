@@ -9,7 +9,7 @@ const Bitfield = require('./lib/bitfield')
 const Replicator = require('./lib/replicator')
 const Info = require('./lib/info')
 const Extensions = require('./lib/extensions')
-const logic = require('./lib/consensus')
+const HypercoreLogic = require('./lib/consensus')
 const mutexify = require('mutexify/promise')
 const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 const NoiseSecretStream = require('noise-secret-stream')
@@ -32,7 +32,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.options = opts
 
     this.crypto = opts.crypto || defaultCrypto
-    this.logic = opts.logic || new HypercoreLogic(this)
+    this.logic = opts.logic || HypercoreLogic
 
     this.storage = defaultStorage(storage)
     this.lock = mutexify()
