@@ -295,7 +295,7 @@ module.exports = class Hypercore extends EventEmitter {
 
       const batch = await this.tree.truncate(newLength, { fork })
 
-      const signature = await this.sign(batch.signable())
+      const signature = await this.sign(batch.digest())
 
       this.info.fork = fork
       this.info.signature = signature
@@ -352,7 +352,7 @@ module.exports = class Hypercore extends EventEmitter {
       // write the blocks, if this fails, we'll just overwrite them later
       await this.blocks.putBatch(this.tree.length, buffers)
 
-      const signature = await this.sign(batch.signable())
+      const signature = await this.sign(batch.digest())
 
       // TODO: needs to written first, then updated
       this.info.signature = signature
