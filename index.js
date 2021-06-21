@@ -12,7 +12,7 @@ const Extensions = require('./lib/extensions')
 const mutexify = require('mutexify/promise')
 const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 const NoiseSecretStream = require('noise-secret-stream')
-const { ReadStream } = require('./lib/stream')
+const { ReadStream, WriteStream } = require('./lib/stream')
 
 const promises = Symbol.for('hypercore.promises')
 const inspect = Symbol.for('nodejs.util.inspect.custom')
@@ -257,6 +257,10 @@ module.exports = class Hypercore extends EventEmitter {
     if (opts && opts.onwait) opts.onwait(index)
 
     return decode(encoding, await this.replicator.requestBlock(index))
+  }
+
+  createWriteStream (opts) {
+    return new WriteStream(this, opts)
   }
 
   createReadStream (opts) {
