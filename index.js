@@ -44,6 +44,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.replicator = null
     this.extensions = opts.extensions || new Extensions(this)
 
+    this.verificationInfo = this.logic.verificationInfo.bind(this)
     this.sign = opts.sign || null
     if (this.sign === null && opts.keyPair && opts.keyPair.secretKey) {
       this.sign = defaultSign(this.crypto, key, opts.keyPair.secretKey)
@@ -81,10 +82,6 @@ module.exports = class Hypercore extends EventEmitter {
   static createProtocolStream (isInitiator, opts) {
     const noiseStream = new NoiseSecretStream(isInitiator, null, opts)
     return noiseStream.rawStream
-  }
-
-  verificationInfo (opts) {
-    return this.logic.verificationInfo(this, opts)
   }
 
   session (opts = {}) {
