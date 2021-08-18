@@ -88,3 +88,20 @@ tape('writable session with invalid keypair throws', async function (t) {
     t.pass('invalid keypair threw')
   }
 })
+
+tape('preload from another session', async function (t) {
+  t.plan(2)
+
+  const first = new Hypercore(ram)
+  await first.ready()
+
+  const second = new Hypercore(null, {
+    preload: () => {
+      return { session: first.session() }
+    }
+  })
+  await second.ready()
+
+  t.same(first.key, second.key)
+  t.same(first.sessions, second.sessions)
+})
