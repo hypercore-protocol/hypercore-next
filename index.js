@@ -197,20 +197,24 @@ module.exports = class Hypercore extends EventEmitter {
       this.options = { ...this.options, ...preloaded }
     }
 
-    if (this.options.from) {
-      const from = this.options.from
-      this._initSession(from)
-      this.sessions = from.sessions
-      this.storage = from.storage
-    }
-
-    if (!this.storage) this.storage = defaultStorage(this.options.storage)
-
     const keyPair = (this.key && this.options.keyPair)
       ? { ...this.options.keyPair, publicKey: this.key }
       : this.key
         ? { publicKey: this.key, secretKey: null }
         : this.options.keyPair
+
+    this.sign = (keyPair && keyPair.secretKey && Core.createSigner(this.crypto, keyPair)) || this.sign
+
+    if (this.options.from) {
+      const from = this.options.from
+      await from.opening
+      this._initSession(from)
+      this.sessions = from.sessions
+      this.storage = from.storage
+      return
+    }
+
+    if (!this.storage) this.storage = defaultStorage(this.options.storage)
 
     this.core = await Core.open(this.storage, {
       crypto: this.crypto,
