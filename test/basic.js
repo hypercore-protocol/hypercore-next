@@ -1,4 +1,7 @@
 const tape = require('tape')
+const ram = require('random-access-memory')
+
+const Hypercore = require('..')
 const { create } = require('./helpers')
 
 tape('basic', async function (t) {
@@ -48,5 +51,9 @@ tape('close', async function (t) {
     t.pass('get threw correctly when core was closed')
   }
 
+tape('storage options', async function (t) {
+  const core = new Hypercore({ storage: ram })
+  await core.append('hello')
+  t.same(await core.get(0), Buffer.from('hello'))
   t.end()
 })

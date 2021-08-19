@@ -18,16 +18,21 @@ module.exports = class Hypercore extends EventEmitter {
   constructor (storage, key, opts) {
     super()
 
-    if (isOptions(key)) {
+    if (isOptions(storage)) {
+      opts = storage
+      storage = null
+      key = null
+    } else if (isOptions(key)) {
       opts = key
       key = null
     }
     if (!opts) opts = {}
+    if (!opts.storage) opts.storage = storage
 
     this[promises] = true
     this.options = opts
 
-    this.storage = defaultStorage(storage || opts.storage)
+    this.storage = null
 
     this.crypto = opts.crypto || hypercoreCrypto
     this.tree = null
@@ -111,13 +116,6 @@ module.exports = class Hypercore extends EventEmitter {
     this.writable = !!this.sign
   }
 
-  _overrideSession (s) {
-    this._initSession(s)
-    this.sessions = s.sessions
-    const idx = this.sessions.indexOf(s)
-    this.sessions[idx] = this
-  }
-
   async close () {
     await this.opening
 
@@ -196,12 +194,17 @@ module.exports = class Hypercore extends EventEmitter {
 
     if (this.options.preload) {
       const preloaded = await this.options.preload()
-      if (preloaded.session) {
-        this._overrideSession(preloaded.session)
-        return
-      }
       this.options = { ...this.options, ...preloaded }
     }
+
+    if (this.options.from) {
+      const from = this.options.from
+      this._initSession(from)
+      this.sessions = from.sessions
+      this.storage = from.storage
+    }
+
+    if (!this.storage) this.storage = defaultStorage(this.options.storage)
 
     const keyPair = (this.key && this.options.keyPair)
       ? { ...this.options.keyPair, publicKey: this.key }
