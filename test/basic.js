@@ -51,6 +51,7 @@ tape('close', async function (t) {
   } catch {
     t.pass('get threw correctly when core was closed')
   }
+})
 
 tape('storage options', async function (t) {
   const core = new Hypercore({ storage: ram })
