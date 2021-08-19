@@ -203,14 +203,13 @@ module.exports = class Hypercore extends EventEmitter {
         ? { publicKey: this.key, secretKey: null }
         : this.options.keyPair
 
-    this.sign = (keyPair && keyPair.secretKey && Core.createSigner(this.crypto, keyPair)) || this.sign
-
     if (this.options.from) {
       const from = this.options.from
       await from.opening
       this._initSession(from)
       this.sessions = from.sessions
       this.storage = from.storage
+      if (!this.sign && keyPair && keyPair.secretKey) this.sign = Core.createSigner(this.crypto, keyPair)
       return
     }
 
