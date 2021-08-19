@@ -1,6 +1,7 @@
 const tape = require('tape')
 const ram = require('random-access-memory')
 const crypto = require('hypercore-crypto')
+
 const Hypercore = require('..')
 
 tape('can create writable sessions from a read-only core', async function (t) {
