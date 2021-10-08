@@ -40,5 +40,10 @@
   },
   "optionalDependencies": {
     "fsctl": "^1.0.0"
+  },
+  "standard": {
+    "ignore": [
+      "test/oplog.mjs"
+    ]
   }
 }
