@@ -43,7 +43,7 @@
   },
   "standard": {
     "ignore": [
-      "test/oplog.mjs"
+      "**/*.mjs"
     ]
   }
 }
