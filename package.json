@@ -4,7 +4,7 @@
   "description": "Hypercore 10",
   "main": "index.js",
   "scripts": {
-    "test": "standard && brittle test/*.{,m}js"
+    "test": "standard && brittle test/*.js"
   },
   "repository": {
     "type": "git",

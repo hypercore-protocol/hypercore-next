@@ -1,26 +1,24 @@
-import p from 'path'
-import fs from 'fs'
-import url from 'url'
-import test from 'brittle'
-import fsctl from 'fsctl'
-import raf from 'random-access-file'
-import * as c from 'compact-encoding'
+const p = require('path')
+const fs = require('fs')
+const test = require('brittle')
+const fsctl = require('fsctl')
+const raf = require('random-access-file')
+const c = require('compact-encoding')
 
-import Oplog from '../lib/oplog.js'
+const Oplog = require('../lib/oplog')
 
-const DIRNAME = p.dirname(url.fileURLToPath(import.meta.url));
 const STORAGE_FILE_NAME = 'oplog-test-storage'
-const STORAGE_FILE_PATH = p.join(DIRNAME, STORAGE_FILE_NAME)
+const STORAGE_FILE_PATH = p.join(__dirname, STORAGE_FILE_NAME)
 const SHOULD_ERROR = Symbol('hypercore-oplog-should-error')
 
-await test('oplog - reset storage', async function (t) {
+test('oplog - reset storage', async function (t) {
   // just to make sure to cleanup storage if it failed half way through before
   if (fs.existsSync(STORAGE_FILE_PATH)) await fs.promises.unlink(STORAGE_FILE_PATH)
   t.pass('data is reset')
   t.end()
 })
 
-await test('oplog - basic append', async function (t) {
+test('oplog - basic append', async function (t) {
   const storage = testStorage()
 
   const logWr = new Oplog(storage)
@@ -64,7 +62,7 @@ await test('oplog - basic append', async function (t) {
   t.end()
 })
 
-await test('oplog - custom encoding', async function (t) {
+test('oplog - custom encoding', async function (t) {
   const storage = testStorage()
 
   const log = new Oplog(storage, {
@@ -88,7 +86,7 @@ await test('oplog - custom encoding', async function (t) {
   t.end()
 })
 
-await test('oplog - alternating header writes', async function (t) {
+test('oplog - alternating header writes', async function (t) {
   const storage = testStorage()
 
   const log = new Oplog(storage)
@@ -120,7 +118,7 @@ await test('oplog - alternating header writes', async function (t) {
   t.end()
 })
 
-await test('oplog - one fully-corrupted header', async function (t) {
+test('oplog - one fully-corrupted header', async function (t) {
   const storage = testStorage()
 
   const log = new Oplog(storage)
@@ -164,7 +162,7 @@ await test('oplog - one fully-corrupted header', async function (t) {
   t.end()
 })
 
-await test('oplog - header invalid checksum', async function (t) {
+test('oplog - header invalid checksum', async function (t) {
   const storage = testStorage()
 
   const log = new Oplog(storage)
@@ -210,7 +208,7 @@ await test('oplog - header invalid checksum', async function (t) {
   t.end()
 })
 
-await test('oplog - malformed log entry gets overwritten', async function (t) {
+test('oplog - malformed log entry gets overwritten', async function (t) {
   let storage = testStorage()
   let log = new Oplog(storage)
 
@@ -256,7 +254,7 @@ await test('oplog - malformed log entry gets overwritten', async function (t) {
   t.end()
 })
 
-await test('oplog - log not truncated when header write fails', async function (t) {
+test('oplog - log not truncated when header write fails', async function (t) {
   const storage = failingOffsetStorage(4096 * 2)
 
   const log = new Oplog(storage)
@@ -299,7 +297,7 @@ await test('oplog - log not truncated when header write fails', async function (
   t.end()
 })
 
-await test('oplog - multi append', async function (t) {
+test('oplog - multi append', async function (t) {
   const storage = testStorage()
 
   const log = new Oplog(storage)
@@ -331,7 +329,7 @@ await test('oplog - multi append', async function (t) {
   t.end()
 })
 
-await test('oplog - multi append is atomic', async function (t) {
+test('oplog - multi append is atomic', async function (t) {
   const storage = testStorage()
 
   const log = new Oplog(storage)
@@ -370,12 +368,12 @@ await test('oplog - multi append is atomic', async function (t) {
 })
 
 function testStorage () {
-  return raf(STORAGE_FILE_NAME, { directory: DIRNAME, lock: fsctl.lock })
+  return raf(STORAGE_FILE_NAME, { directory: __dirname, lock: fsctl.lock })
 }
 
 function failingOffsetStorage (offset) {
   let shouldError = false
-  const storage = raf(STORAGE_FILE_NAME, { directory: DIRNAME, lock: fsctl.lock })
+  const storage = raf(STORAGE_FILE_NAME, { directory: __dirname, lock: fsctl.lock })
   const write = storage.write.bind(storage)
 
   storage.write = (off, data, cb) => {
