@@ -17,7 +17,7 @@ module.exports = {
     return [s1, s2]
   },
 
-  async tick () {
+  async eventFlush () {
     await new Promise(resolve => setImmediate(resolve))
   }
 }
