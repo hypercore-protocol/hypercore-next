@@ -1,6 +1,6 @@
 const test = require('brittle')
 const NoiseSecretStream = require('noise-secret-stream')
-const { create, replicate, tick } = require('./helpers')
+const { create, replicate, eventFlush } = require('./helpers')
 
 test('basic replication', async function (t) {
   const a = await create()
@@ -227,7 +227,7 @@ test('async multiplexing', async function (t) {
 
   // b2 doesn't replicate immediately.
   a2.replicate(a)
-  await tick()
+  await eventFlush()
   b2.replicate(b)
 
   await new Promise(resolve => b2.once('peer-add', resolve))
