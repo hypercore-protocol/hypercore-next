@@ -315,3 +315,21 @@ test('replicate discrete range', async function (t) {
   t.alike(await b.get(2), Buffer.from('c'))
   t.alike(await b.get(3), Buffer.from('d'))
 })
+
+test('replicate discrete empty range', async function (t) {
+  const a = await create()
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  const b = await create(a.key)
+
+  let d = 0
+  b.on('download', () => d++)
+
+  replicate(a, b, t)
+
+  const r = b.download({ blocks: [] })
+  await r.downloaded()
+
+  t.is(d, 0)
+})
