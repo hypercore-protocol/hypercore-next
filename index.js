@@ -2,6 +2,7 @@ const { EventEmitter } = require('events')
 const raf = require('random-access-file')
 const isOptions = require('is-options')
 const hypercoreCrypto = require('hypercore-crypto')
+const sodium = require('sodium-universal')
 const c = require('compact-encoding')
 const Xache = require('xache')
 const NoiseSecretStream = require('@hyperswarm/secret-stream')
@@ -50,6 +51,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.valueEncoding = null
     this.key = key || null
     this.discoveryKey = null
+    this.encryptionKey = opts.encryptionKey || null
     this.readable = true
     this.writable = false
     this.opened = false
@@ -340,7 +342,7 @@ module.exports = class Hypercore extends EventEmitter {
   async seek (bytes) {
     if (this.opened === false) await this.opening
 
-    const s = this.core.tree.seek(bytes)
+    const s = this.core.tree.seek(bytes, this.encryptionKey ? sodium.crypto_stream_NONCEBYTES : 0)
 
     return (await s.update()) || this.replicator.requestSeek(s)
   }
@@ -364,10 +366,10 @@ module.exports = class Hypercore extends EventEmitter {
   async _get (index, opts) {
     const encoding = (opts && opts.valueEncoding && c.from(codecs(opts.valueEncoding))) || this.valueEncoding
 
-    if (this.core.bitfield.get(index)) return decode(encoding, await this.core.blocks.get(index))
+    if (this.core.bitfield.get(index)) return this._decode(encoding, await this.core.blocks.get(index))
     if (opts && opts.onwait) opts.onwait(index)
 
-    return decode(encoding, await this.replicator.requestBlock(index))
+    return this._decode(encoding, await this.replicator.requestBlock(index))
   }
 
   download (range) {
@@ -410,19 +412,12 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.opened === false) await this.opening
     if (this.writable === false) throw new Error('Core is not writable')
 
-    const blks = Array.isArray(blocks) ? blocks : [blocks]
-    const buffers = new Array(blks.length)
+    blocks = Array.isArray(blocks) ? blocks : [blocks]
 
-    for (let i = 0; i < blks.length; i++) {
-      const blk = blks[i]
+    const buffers = new Array(blocks.length)
 
-      const buf = Buffer.isBuffer(blk)
-        ? blk
-        : this.valueEncoding
-          ? c.encode(this.valueEncoding, blk)
-          : Buffer.from(blk)
-
-      buffers[i] = buf
+    for (let i = 0; i < blocks.length; i++) {
+      buffers[i] = this._encode(this.valueEncoding, blocks[i])
     }
 
     return await this.core.append(buffers, this.sign)
@@ -436,13 +431,51 @@ module.exports = class Hypercore extends EventEmitter {
   onextensionupdate () {
     if (this.replicator !== null) this.replicator.broadcastOptions()
   }
+
+  _encode (enc, val) {
+    const state = c.state()
+
+    if (this.encryptionKey) {
+      state.end += sodium.crypto_stream_NONCEBYTES
+      state.start += sodium.crypto_stream_NONCEBYTES
+    }
+
+    if (Buffer.isBuffer(val)) state.end += val.byteLength
+    else if (enc) enc.preencode(state, val)
+    else {
+      val = Buffer.from(val)
+      state.end += val.byteLength
+    }
+
+    state.buffer = Buffer.alloc(state.end)
+
+    if (enc) enc.encode(state, val)
+    else state.buffer.set(val, state.start)
+
+    if (this.encryptionKey) {
+      const nonce = state.buffer.subarray(0, sodium.crypto_stream_NONCEBYTES)
+      const data = state.buffer.subarray(sodium.crypto_stream_NONCEBYTES)
+
+      sodium.randombytes_buf(nonce)
+      sodium.crypto_stream_xor(data, data, nonce, this.encryptionKey)
+    }
+
+    return state.buffer
+  }
+
+  _decode (enc, buf) {
+    if (this.encryptionKey) {
+      const nonce = buf.subarray(0, sodium.crypto_stream_NONCEBYTES)
+      buf = buf.subarray(sodium.crypto_stream_NONCEBYTES)
+      sodium.crypto_stream_xor(buf, buf, nonce, this.encryptionKey)
+    }
+
+    if (enc) return c.decode(enc, buf)
+    else return buf
+  }
 }
 
 function noop () {}
-
-function decode (enc, buf) {
-  return enc ? c.decode(enc, buf) : buf
-}
 
 function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
