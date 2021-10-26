@@ -1,10 +1,10 @@
 const test = require('brittle')
-const { create } = require('./helpers')
+const { create, replicate } = require('./helpers')
+
+const encryptionKey = Buffer.alloc(32, 'hello world')
 
 test('encrypted append and get', async function (t) {
-  const a = await create({
-    encryptionKey: Buffer.alloc(32, 'hello world')
-  })
+  const a = await create({ encryptionKey })
 
   await a.append(['hello'])
 
@@ -15,10 +15,8 @@ test('encrypted append and get', async function (t) {
   t.unlike(unencrypted, encrypted)
 })
 
-test.solo('encrypted seek', async function (t) {
-  const a = await create({
-    encryptionKey: Buffer.alloc(32, 'hello world')
-  })
+test('encrypted seek', async function (t) {
+  const a = await create({ encryptionKey })
 
   await a.append(['hello', 'world', '!'])
 
@@ -30,4 +28,37 @@ test.solo('encrypted seek', async function (t) {
   t.alike(await a.seek(9), [1, 4])
   t.alike(await a.seek(10), [2, 0])
   t.alike(await a.seek(11), [3, 0])
+})
+
+test('encrypted replication', async function (t) {
+  const a = await create({ encryptionKey })
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  t.test('with encryption key', async function (t) {
+    const b = await create(a.key, { encryptionKey })
+
+    replicate(a, b, t)
+
+    const r = b.download({ start: 0, end: a.length })
+    await r.downloaded()
+
+    for (let i = 0; i < 5; i++) {
+      t.alike(await b.get(i), await a.get(i))
+    }
+  })
+
+  t.test('without encryption key', async function (t) {
+    const b = await create(a.key)
+
+    replicate(a, b, t)
+
+    const r = b.download({ start: 0, end: a.length })
+    await r.downloaded()
+
+    for (let i = 0; i < 5; i++) {
+      t.unlike(await b.get(i), await a.get(i))
+      t.alike(await b.get(i), await a.core.blocks.get(i))
+    }
+  })
 })
