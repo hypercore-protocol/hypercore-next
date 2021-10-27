@@ -86,6 +86,5 @@ test(
 
     t.is(core.key, key)
     t.pass('creating a core with more than 32 byteLength key did not throw')
-    t.end()
   }
 )
