@@ -382,8 +382,8 @@ module.exports = class Hypercore extends EventEmitter {
         ? range.blocks
         : new Set(range.blocks)
 
-      start = range.start || blocks.size ? min(range.blocks) : 0
-      end = range.end || blocks.size ? max(range.blocks) + 1 : 0
+      start = range.start || (blocks.size ? min(range.blocks) : 0)
+      end = range.end || (blocks.size ? max(range.blocks) + 1 : 0)
 
       filter = (i) => blocks.has(i)
     } else {
@@ -474,10 +474,15 @@ function toHex (buf) {
   return buf && buf.toString('hex')
 }
 
+function reduce (iter, fn, acc) {
+  for (const item of iter) acc = fn(acc, item)
+  return acc
+}
+
 function min (arr) {
-  return arr.reduce((a, b) => Math.min(a, b))
+  return reduce(arr, (a, b) => Math.min(a, b), Infinity)
 }
 
 function max (arr) {
-  return arr.reduce((a, b) => Math.max(a, b))
+  return reduce(arr, (a, b) => Math.max(a, b), -Infinity)
 }
