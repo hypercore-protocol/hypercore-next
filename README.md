@@ -64,7 +64,7 @@ Note that `tree`, `data`, and `bitfield` are normally heavily sparse files.
   overwrite: false, // overwrite any old Hypercore that might already exist
   valueEncoding: 'json' | 'utf-8' | 'binary', // defaults to binary
   keyPair: kp, // optionally pass the public key and secret key as a key pair
-  encryptionKey: k // optionally pass an encryption key to encrypt the Hypercore
+  encryptionKey: k // optionally pass an encryption key to enable block encryption
 }
 ```
 
@@ -198,7 +198,7 @@ Populated after `ready` has been emitted. Will be `null` before the event.
 
 #### `core.encryptionKey`
 
-Buffer containing the optional encryption key of this core.
+Buffer containing the optional block encryption key of this core.
 
 #### `core.length`
 
@@ -220,7 +220,7 @@ Populated after `ready` has been emitted. Will be `0` before the event.
 
 #### `core.padding`
 
-How much padding is applied to each block of this core?
+How much padding is applied to each block of this core? Will be `0` unless block encryption is enabled.
 
 #### `const stream = core.replicate(isInitiatorOrReplicationStream)`
 

@@ -506,8 +506,8 @@ const nonceBuf = Buffer.alloc(sodium.crypto_stream_NONCEBYTES)
 function nonce (index, fork) {
   const state = { start: 0, end: nonceBuf.byteLength, buffer: nonceBuf }
 
-  c.uint.encode(state, fork)
-  c.uint.encode(state, index)
+  c.uint64.encode(state, fork)
+  c.uint64.encode(state, index)
 
   // Zero out the remainder of the nonce
   nonceBuf.fill(0, state.start)
