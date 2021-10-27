@@ -370,13 +370,17 @@ module.exports = class Hypercore extends EventEmitter {
   async _get (index, opts) {
     const encoding = (opts && opts.valueEncoding && c.from(codecs(opts.valueEncoding))) || this.valueEncoding
 
+    let block
+
     if (this.core.bitfield.get(index)) {
-      return this._decode(index, encoding, await this.core.blocks.get(index))
+      block = await this.core.blocks.get(index)
+    } else {
+      if (opts && opts.onwait) opts.onwait(index)
+      block = await this.replicator.requestBlock(index)
     }
 
-    if (opts && opts.onwait) opts.onwait(index)
-
-    return this._decode(index, encoding, await this.replicator.requestBlock(index))
+    this._decrypt(index, block)
+    return this._decode(encoding, block)
   }
 
   download (range) {
@@ -436,13 +440,20 @@ module.exports = class Hypercore extends EventEmitter {
     blocks = Array.isArray(blocks) ? blocks : [blocks]
 
     const buffers = new Array(blocks.length)
-    const offset = this.core.tree.length
 
     for (let i = 0; i < blocks.length; i++) {
-      buffers[i] = this._encode(offset + i, this.valueEncoding, blocks[i])
+      buffers[i] = this._encode(this.valueEncoding, blocks[i])
     }
 
-    return await this.core.append(buffers, this.sign)
+    return await this.core.append(buffers, this.sign, {
+      preappend: (blocks) => {
+        const offset = this.core.tree.length
+
+        for (let i = 0; i < blocks.length; i++) {
+          this._encrypt(offset + i, blocks[i])
+        }
+      }
+    })
   }
 
   registerExtension (name, handlers) {
@@ -454,7 +465,7 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.replicator !== null) this.replicator.broadcastOptions()
   }
 
-  _encode (index, enc, val) {
+  _encode (enc, val) {
     const state = { start: this.padding, end: this.padding, buffer: null }
 
     if (Buffer.isBuffer(val)) state.end += val.byteLength
@@ -475,28 +486,45 @@ module.exports = class Hypercore extends EventEmitter {
       if (this.padding > 0) {
         c.uint.encode({ start: 0, end: this.padding, buffer: state.buffer }, fork)
       }
-
-      const buf = state.buffer.subarray(this.padding)
-      sodium.crypto_stream_xor(buf, buf, nonce(index, fork), this.encryptionKey)
     }
 
     return state.buffer
   }
 
-  _decode (index, enc, buf) {
+  _decode (enc, block) {
+    block = block.subarray(this.padding)
+    if (enc) return c.decode(enc, block)
+    else return block
+  }
+
+  _encrypt (index, block) {
+    if (this.encryptionKey) {
+      block = block.subarray(this.padding)
+      sodium.crypto_stream_xor(
+        block,
+        block,
+        nonce(index, this.core.tree.fork),
+        this.encryptionKey
+      )
+    }
+  }
+
+  _decrypt (index, block) {
     if (this.encryptionKey) {
       let fork = 0
 
       if (this.padding > 0) {
-        fork = c.uint.decode({ start: 0, end: this.padding, buffer: buf })
+        fork = c.uint.decode({ start: 0, end: this.padding, buffer: block })
       }
 
-      buf = buf.subarray(this.padding)
-      sodium.crypto_stream_xor(buf, buf, nonce(index, fork), this.encryptionKey)
+      block = block.subarray(this.padding)
+      sodium.crypto_stream_xor(
+        block,
+        block,
+        nonce(index, fork),
+        this.encryptionKey
+      )
     }
-
-    if (enc) return c.decode(enc, buf)
-    else return buf
   }
 }
 
