@@ -378,9 +378,13 @@ module.exports = class Hypercore extends EventEmitter {
     let filter
 
     if (range && range.blocks) {
-      const blocks = new Set(range.blocks)
-      start = blocks.size ? min(range.blocks) : 0
-      end = blocks.size ? max(range.blocks) + 1 : 0
+      const blocks = range.blocks instanceof Set
+        ? range.blocks
+        : new Set(range.blocks)
+
+      start = range.start || blocks.size ? min(range.blocks) : 0
+      end = range.end || blocks.size ? max(range.blocks) + 1 : 0
+
       filter = (i) => blocks.has(i)
     } else {
       start = (range && range.start) || 0
