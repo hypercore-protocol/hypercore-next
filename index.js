@@ -52,6 +52,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.key = key || null
     this.discoveryKey = null
     this.encryptionKey = opts.encryptionKey || null
+    this.padding = opts.encryptionKey ? 8 : 0
     this.readable = true
     this.writable = false
     this.opened = false
@@ -342,7 +343,7 @@ module.exports = class Hypercore extends EventEmitter {
   async seek (bytes) {
     if (this.opened === false) await this.opening
 
-    const s = this.core.tree.seek(bytes, this.encryptionKey ? sodium.crypto_stream_NONCEBYTES : 0)
+    const s = this.core.tree.seek(bytes, this.padding)
 
     return (await s.update()) || this.replicator.requestSeek(s)
   }
@@ -366,10 +367,13 @@ module.exports = class Hypercore extends EventEmitter {
   async _get (index, opts) {
     const encoding = (opts && opts.valueEncoding && c.from(codecs(opts.valueEncoding))) || this.valueEncoding
 
-    if (this.core.bitfield.get(index)) return this._decode(encoding, await this.core.blocks.get(index))
+    if (this.core.bitfield.get(index)) {
+      return this._decode(index, encoding, await this.core.blocks.get(index))
+    }
+
     if (opts && opts.onwait) opts.onwait(index)
 
-    return this._decode(encoding, await this.replicator.requestBlock(index))
+    return this._decode(index, encoding, await this.replicator.requestBlock(index))
   }
 
   download (range) {
@@ -415,9 +419,10 @@ module.exports = class Hypercore extends EventEmitter {
     blocks = Array.isArray(blocks) ? blocks : [blocks]
 
     const buffers = new Array(blocks.length)
+    const offset = this.core.tree.length
 
     for (let i = 0; i < blocks.length; i++) {
-      buffers[i] = this._encode(this.valueEncoding, blocks[i])
+      buffers[i] = this._encode(offset + i, this.valueEncoding, blocks[i])
     }
 
     return await this.core.append(buffers, this.sign)
@@ -432,13 +437,8 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.replicator !== null) this.replicator.broadcastOptions()
   }
 
-  _encode (enc, val) {
-    const state = c.state()
-
-    if (this.encryptionKey) {
-      state.end += sodium.crypto_stream_NONCEBYTES
-      state.start += sodium.crypto_stream_NONCEBYTES
-    }
+  _encode (index, enc, val) {
+    const state = { start: this.padding, end: this.padding, buffer: null }
 
     if (Buffer.isBuffer(val)) state.end += val.byteLength
     else if (enc) enc.preencode(state, val)
@@ -453,21 +453,29 @@ module.exports = class Hypercore extends EventEmitter {
     else state.buffer.set(val, state.start)
 
     if (this.encryptionKey) {
-      const nonce = state.buffer.subarray(0, sodium.crypto_stream_NONCEBYTES)
-      const data = state.buffer.subarray(sodium.crypto_stream_NONCEBYTES)
+      const fork = this.core.tree.fork
 
-      sodium.randombytes_buf(nonce)
-      sodium.crypto_stream_xor(data, data, nonce, this.encryptionKey)
+      if (this.padding > 0) {
+        c.uint.encode({ start: 0, end: this.padding, buffer: state.buffer }, fork)
+      }
+
+      const buf = state.buffer.subarray(this.padding)
+      sodium.crypto_stream_xor(buf, buf, nonce(index, fork), this.encryptionKey)
     }
 
     return state.buffer
   }
 
-  _decode (enc, buf) {
+  _decode (index, enc, buf) {
     if (this.encryptionKey) {
-      const nonce = buf.subarray(0, sodium.crypto_stream_NONCEBYTES)
-      buf = buf.subarray(sodium.crypto_stream_NONCEBYTES)
-      sodium.crypto_stream_xor(buf, buf, nonce, this.encryptionKey)
+      let fork = 0
+
+      if (this.padding > 0) {
+        fork = c.uint.decode({ start: 0, end: this.padding, buffer: buf })
+      }
+
+      buf = buf.subarray(this.padding)
+      sodium.crypto_stream_xor(buf, buf, nonce(index, fork), this.encryptionKey)
     }
 
     if (enc) return c.decode(enc, buf)
@@ -491,4 +499,18 @@ function requireMaybe (name) {
 
 function toHex (buf) {
   return buf && buf.toString('hex')
+}
+
+const nonceBuf = Buffer.alloc(sodium.crypto_stream_NONCEBYTES)
+
+function nonce (index, fork) {
+  const state = { start: 0, end: nonceBuf.byteLength, buffer: nonceBuf }
+
+  c.uint.encode(state, fork)
+  c.uint.encode(state, index)
+
+  // Zero out the remainder of the nonce
+  nonceBuf.fill(0, state.start)
+
+  return nonceBuf
 }

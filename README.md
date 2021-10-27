@@ -196,6 +196,10 @@ In contrast to `core.key` this key does not allow you to verify the data but can
 
 Populated after `ready` has been emitted. Will be `null` before the event.
 
+#### `core.encryptionKey`
+
+Buffer containing the optional encryption key of this core.
+
 #### `core.length`
 
 How many blocks of data are available on this core?
@@ -213,6 +217,10 @@ Populated after `ready` has been emitted. Will be `0` before the event.
 What is the current fork id of this core?
 
 Populated after `ready` has been emitted. Will be `0` before the event.
+
+#### `core.padding`
+
+How much padding is applied to each block of this core?
 
 #### `const stream = core.replicate(isInitiatorOrReplicationStream)`
 
