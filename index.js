@@ -500,9 +500,8 @@ module.exports = class Hypercore extends EventEmitter {
   _encrypt (index, block) {
     if (this.encryptionKey) {
       const padding = block.subarray(0, this.padding)
-      block = block.subarray(this.padding)
       this
-        ._xor(block, nonce(index, padding))
+        ._xor(block.subarray(this.padding), nonce(index, padding))
         ._xor(padding, nonce(index))
     }
   }
@@ -510,10 +509,9 @@ module.exports = class Hypercore extends EventEmitter {
   _decrypt (index, block) {
     if (this.encryptionKey) {
       const padding = block.subarray(0, this.padding)
-      block = block.subarray(this.padding)
       this
         ._xor(padding, nonce(index))
-        ._xor(block, nonce(index, padding))
+        ._xor(block.subarray(this.padding), nonce(index, padding))
     }
   }
 
