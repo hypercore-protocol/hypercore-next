@@ -205,7 +205,7 @@ Populated after `ready` has been emitted. Will be `null` before the event.
 
 #### `core.encryptionKey`
 
-Buffer containing the optional block encryption key of this core.
+Buffer containing the optional block encryption key of this core. Will be `null` unless block encryption is enabled.
 
 #### `core.length`
 
