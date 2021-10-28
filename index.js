@@ -476,12 +476,11 @@ module.exports = class Hypercore extends EventEmitter {
     if (enc) enc.encode(state, val)
     else state.buffer.set(val, state.start)
 
-    if (this.encryptionKey) {
-      const fork = this.core.tree.fork
-
-      if (this.padding > 0) {
-        c.uint.encode({ start: 0, end: this.padding, buffer: state.buffer }, fork)
-      }
+    if (this.padding > 0) {
+      c.uint.encode(
+        { start: 0, end: this.padding, buffer: state.buffer },
+        this.core.tree.fork
+      )
     }
 
     return state.buffer
