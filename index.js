@@ -490,13 +490,6 @@ module.exports = class Hypercore extends EventEmitter {
     if (enc) enc.encode(state, val)
     else state.buffer.set(val, state.start)
 
-    if (this.padding > 0) {
-      c.uint.encode(
-        { start: 0, end: this.padding, buffer: state.buffer },
-        this.core.tree.fork
-      )
-    }
-
     return state.buffer
   }
 
@@ -540,8 +533,9 @@ function max (arr) {
 
 function preappend (blocks) {
   const offset = this.core.tree.length
+  const fork = this.core.tree.fork
 
   for (let i = 0; i < blocks.length; i++) {
-    this.encryption.encrypt(offset + i, blocks[i])
+    this.encryption.encrypt(offset + i, blocks[i], fork)
   }
 }
