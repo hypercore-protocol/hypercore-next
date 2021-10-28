@@ -2,7 +2,6 @@ const { EventEmitter } = require('events')
 const raf = require('random-access-file')
 const isOptions = require('is-options')
 const hypercoreCrypto = require('hypercore-crypto')
-const sodium = require('sodium-universal')
 const c = require('compact-encoding')
 const Xache = require('xache')
 const NoiseSecretStream = require('@hyperswarm/secret-stream')
@@ -13,6 +12,7 @@ const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 const Replicator = require('./lib/replicator')
 const Extensions = require('./lib/extensions')
 const Core = require('./lib/core')
+const BlockEncryption = require('./lib/block-encryption')
 
 const promises = Symbol.for('hypercore.promises')
 const inspect = Symbol.for('nodejs.util.inspect.custom')
@@ -55,7 +55,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.key = key || null
     this.discoveryKey = null
     this.encryptionKey = opts.encryptionKey || null
-    this.padding = opts.encryptionKey ? 8 : 0
+    this.encryption = opts.encryptionKey ? new BlockEncryption(this.encryptionKey) : null
     this.readable = true
     this.writable = false
     this.opened = false
@@ -223,6 +223,10 @@ module.exports = class Hypercore extends EventEmitter {
     return this.replicator === null ? [] : this.replicator.peers
   }
 
+  get padding () {
+    return this.encryption === null ? 0 : this.encryption.padding
+  }
+
   ready () {
     return this.opening
   }
@@ -381,7 +385,7 @@ module.exports = class Hypercore extends EventEmitter {
       block = await this.replicator.requestBlock(index)
     }
 
-    this._decrypt(index, block)
+    if (this.encryption) this.encryption.decrypt(index, block)
     return this._decode(encoding, block)
   }
 
@@ -492,34 +496,13 @@ module.exports = class Hypercore extends EventEmitter {
     else return block
   }
 
-  _xor (buffer, nonce) {
-    sodium.crypto_stream_xor(buffer, buffer, nonce, this.encryptionKey)
-    return this
-  }
-
-  _encrypt (index, block) {
-    if (this.encryptionKey) {
-      const padding = block.subarray(0, this.padding)
-      this
-        ._xor(block.subarray(this.padding), nonce(index, padding))
-        ._xor(padding, nonce(index))
-    }
-  }
-
-  _decrypt (index, block) {
-    if (this.encryptionKey) {
-      const padding = block.subarray(0, this.padding)
-      this
-        ._xor(padding, nonce(index))
-        ._xor(block.subarray(this.padding), nonce(index, padding))
-    }
-  }
-
   _preappend (blocks) {
-    const offset = this.core.tree.length
+    if (this.encryption) {
+      const offset = this.core.tree.length
 
-    for (let i = 0; i < blocks.length; i++) {
-      this._encrypt(offset + i, blocks[i])
+      for (let i = 0; i < blocks.length; i++) {
+        this.encryption.encrypt(offset + i, blocks[i])
+      }
     }
   }
 }
@@ -553,18 +536,4 @@ function min (arr) {
 
 function max (arr) {
   return reduce(arr, (a, b) => Math.max(a, b), -Infinity)
-}
-
-const nonceBuf = Buffer.alloc(sodium.crypto_stream_NONCEBYTES)
-
-function nonce (index, rest) {
-  const state = { start: 0, end: nonceBuf.byteLength, buffer: nonceBuf }
-
-  c.uint64.encode(state, index)
-  if (rest) c.raw.encode(state, rest)
-
-  // Zero out the remainder of the nonce
-  nonceBuf.fill(0, state.start)
-
-  return nonceBuf
 }
