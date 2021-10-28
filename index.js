@@ -481,8 +481,9 @@ module.exports = class Hypercore extends EventEmitter {
     if (Buffer.isBuffer(val)) {
       if (state.start === 0) return val
       state.end += val.byteLength
-    } else if (enc) enc.preencode(state, val)
-    else {
+    } else if (enc) {
+      enc.preencode(state, val)
+    } else {
       val = Buffer.from(val)
       if (state.start === 0) return val
       state.end += val.byteLength
