@@ -492,23 +492,18 @@ module.exports = class Hypercore extends EventEmitter {
     else return block
   }
 
+  _xor (buffer, nonce) {
+    sodium.crypto_stream_xor(buffer, buffer, nonce, this.encryptionKey)
+    return this
+  }
+
   _encrypt (index, block) {
     if (this.encryptionKey) {
       const padding = block.subarray(0, this.padding)
       block = block.subarray(this.padding)
-
-      sodium.crypto_stream_xor(
-        block,
-        block,
-        nonce(index, padding),
-        this.encryptionKey
-      )
-      sodium.crypto_stream_xor(
-        padding,
-        padding,
-        nonce(index),
-        this.encryptionKey
-      )
+      this
+        ._xor(block, nonce(index, padding))
+        ._xor(padding, nonce(index))
     }
   }
 
@@ -516,19 +511,9 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.encryptionKey) {
       const padding = block.subarray(0, this.padding)
       block = block.subarray(this.padding)
-
-      sodium.crypto_stream_xor(
-        padding,
-        padding,
-        nonce(index),
-        this.encryptionKey
-      )
-      sodium.crypto_stream_xor(
-        block,
-        block,
-        nonce(index, padding),
-        this.encryptionKey
-      )
+      this
+        ._xor(padding, nonce(index))
+        ._xor(block, nonce(index, padding))
     }
   }
 
