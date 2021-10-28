@@ -41,7 +41,13 @@ test('encrypted replication', async function (t) {
   await a.append(['a', 'b', 'c', 'd', 'e'])
 
   t.test('with encryption key', async function (t) {
+    t.plan(10)
+
     const b = await create(a.key, { encryptionKey })
+
+    b.on('download', (i, block) => {
+      t.alike(block, Buffer.from([i + /* a */ 0x61]))
+    })
 
     replicate(a, b, t)
 
@@ -66,4 +72,14 @@ test('encrypted replication', async function (t) {
       t.alike(await b.get(i), await a.core.blocks.get(i))
     }
   })
+})
+
+test('encrypted sessions', async function (t) {
+  const a = await create({ encryptionKey })
+
+  await a.append(['hello'])
+
+  const session = a.session()
+
+  t.alike(await session.get(0), Buffer.from('hello'))
 })

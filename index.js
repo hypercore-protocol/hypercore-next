@@ -67,7 +67,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.opening = opts._opening || this._open(key, storage, opts)
     this.opening.catch(noop)
 
-    this._preappend = this._preappend.bind(this)
+    this.preappend = this.encryption && preappend.bind(this)
   }
 
   [inspect] (depth, opts) {
@@ -123,6 +123,7 @@ module.exports = class Hypercore extends EventEmitter {
       ...opts,
       sign: opts.sign || (keyPair && keyPair.secretKey && Core.createSigner(this.crypto, keyPair)) || this.sign,
       valueEncoding: this.valueEncoding,
+      encryptionKey: this.encryptionKey,
       extensions: this.extensions,
       _opening: this.opening,
       _sessions: this.sessions
@@ -211,7 +212,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   get byteLength () {
-    return this.core === null ? 0 : this.core.tree.byteLength - (this.length * this.padding)
+    return this.core === null ? 0 : this.core.tree.byteLength - (this.core.tree.length * this.padding)
   }
 
   get fork () {
@@ -317,6 +318,12 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     if (value) {
+      if (this.encryption) {
+        this.encryption.decrypt(bitfield.start, value)
+      }
+
+      value = value.subarray(this.padding)
+
       for (let i = 0; i < this.sessions.length; i++) {
         this.sessions[i].emit('download', bitfield.start, value, from)
       }
@@ -455,7 +462,7 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     return await this.core.append(buffers, this.sign, {
-      preappend: this._preappend
+      preappend: this.preappend
     })
   }
 
@@ -496,17 +503,7 @@ module.exports = class Hypercore extends EventEmitter {
   _decode (enc, block) {
     block = block.subarray(this.padding)
     if (enc) return c.decode(enc, block)
-    else return block
-  }
-
-  _preappend (blocks) {
-    if (this.encryption) {
-      const offset = this.core.tree.length
-
-      for (let i = 0; i < blocks.length; i++) {
-        this.encryption.encrypt(offset + i, blocks[i])
-      }
-    }
+    return block
   }
 }
 
@@ -539,4 +536,12 @@ function min (arr) {
 
 function max (arr) {
   return reduce(arr, (a, b) => Math.max(a, b), -Infinity)
+}
+
+function preappend (blocks) {
+  const offset = this.core.tree.length
+
+  for (let i = 0; i < blocks.length; i++) {
+    this.encryption.encrypt(offset + i, blocks[i])
+  }
 }
