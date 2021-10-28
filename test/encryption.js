@@ -6,6 +6,8 @@ const encryptionKey = Buffer.alloc(32, 'hello world')
 test('encrypted append and get', async function (t) {
   const a = await create({ encryptionKey })
 
+  t.alike(a.encryptionKey, encryptionKey)
+
   await a.append(['hello'])
 
   t.is(a.byteLength, 5)

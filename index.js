@@ -50,12 +50,11 @@ module.exports = class Hypercore extends EventEmitter {
     this.replicator = null
     this.extensions = opts.extensions || new Extensions()
     this.cache = opts.cache === true ? new Xache({ maxSize: 65536, maxAge: 0 }) : (opts.cache || null)
+    this.encryption = opts.encryptionKey ? new BlockEncryption(opts.encryptionKey) : null
 
     this.valueEncoding = null
     this.key = key || null
     this.discoveryKey = null
-    this.encryptionKey = opts.encryptionKey || null
-    this.encryption = opts.encryptionKey ? new BlockEncryption(this.encryptionKey) : null
     this.readable = true
     this.writable = false
     this.opened = false
@@ -221,6 +220,10 @@ module.exports = class Hypercore extends EventEmitter {
 
   get peers () {
     return this.replicator === null ? [] : this.replicator.peers
+  }
+
+  get encryptionKey () {
+    return this.encryption && this.encryption.key
   }
 
   get padding () {
