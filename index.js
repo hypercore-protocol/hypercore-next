@@ -478,14 +478,17 @@ module.exports = class Hypercore extends EventEmitter {
   _encode (enc, val) {
     const state = { start: this.padding, end: this.padding, buffer: null }
 
-    if (Buffer.isBuffer(val)) state.end += val.byteLength
-    else if (enc) enc.preencode(state, val)
+    if (Buffer.isBuffer(val)) {
+      if (state.start === 0) return val
+      state.end += val.byteLength
+    } else if (enc) enc.preencode(state, val)
     else {
       val = Buffer.from(val)
+      if (state.start === 0) return val
       state.end += val.byteLength
     }
 
-    state.buffer = Buffer.alloc(state.end)
+    state.buffer = Buffer.allocUnsafe(state.end)
 
     if (enc) enc.encode(state, val)
     else state.buffer.set(val, state.start)
