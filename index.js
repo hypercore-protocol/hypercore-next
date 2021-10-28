@@ -499,11 +499,19 @@ module.exports = class Hypercore extends EventEmitter {
 
   _encrypt (index, block) {
     if (this.encryptionKey) {
+      const padding = block.subarray(0, this.padding)
       block = block.subarray(this.padding)
+
       sodium.crypto_stream_xor(
         block,
         block,
-        nonce(index, this.core.tree.fork),
+        nonce(index, padding),
+        this.encryptionKey
+      )
+      sodium.crypto_stream_xor(
+        padding,
+        padding,
+        nonce(index),
         this.encryptionKey
       )
     }
@@ -511,17 +519,19 @@ module.exports = class Hypercore extends EventEmitter {
 
   _decrypt (index, block) {
     if (this.encryptionKey) {
-      let fork = 0
-
-      if (this.padding > 0) {
-        fork = c.uint.decode({ start: 0, end: this.padding, buffer: block })
-      }
-
+      const padding = block.subarray(0, this.padding)
       block = block.subarray(this.padding)
+
+      sodium.crypto_stream_xor(
+        padding,
+        padding,
+        nonce(index),
+        this.encryptionKey
+      )
       sodium.crypto_stream_xor(
         block,
         block,
-        nonce(index, fork),
+        nonce(index, padding),
         this.encryptionKey
       )
     }
@@ -561,11 +571,11 @@ function max (arr) {
 
 const nonceBuf = Buffer.alloc(sodium.crypto_stream_NONCEBYTES)
 
-function nonce (index, fork) {
+function nonce (index, rest) {
   const state = { start: 0, end: nonceBuf.byteLength, buffer: nonceBuf }
 
-  c.uint64.encode(state, fork)
   c.uint64.encode(state, index)
+  if (rest) c.raw.encode(state, rest)
 
   // Zero out the remainder of the nonce
   nonceBuf.fill(0, state.start)
