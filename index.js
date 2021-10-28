@@ -67,7 +67,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.opening = opts._opening || this._open(key, storage, opts)
     this.opening.catch(noop)
 
-    this.preappend = this.encryption && preappend.bind(this)
+    this._preappend = this.encryption && preappend.bind(this)
   }
 
   [inspect] (depth, opts) {
@@ -462,7 +462,7 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     return await this.core.append(buffers, this.sign, {
-      preappend: this.preappend
+      preappend: this._preappend
     })
   }
 
