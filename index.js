@@ -67,6 +67,8 @@ module.exports = class Hypercore extends EventEmitter {
     this.closing = null
     this.opening = opts._opening || this._open(key, storage, opts)
     this.opening.catch(noop)
+
+    this._preappend = this._preappend.bind(this)
   }
 
   [inspect] (depth, opts) {
@@ -210,7 +212,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   get byteLength () {
-    return this.core === null ? 0 : this.core.tree.byteLength
+    return this.core === null ? 0 : this.core.tree.byteLength - (this.length * this.padding)
   }
 
   get fork () {
@@ -446,13 +448,7 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     return await this.core.append(buffers, this.sign, {
-      preappend: (blocks) => {
-        const offset = this.core.tree.length
-
-        for (let i = 0; i < blocks.length; i++) {
-          this._encrypt(offset + i, blocks[i])
-        }
-      }
+      preappend: this._preappend
     })
   }
 
@@ -534,6 +530,14 @@ module.exports = class Hypercore extends EventEmitter {
         nonce(index, padding),
         this.encryptionKey
       )
+    }
+  }
+
+  _preappend (blocks) {
+    const offset = this.core.tree.length
+
+    for (let i = 0; i < blocks.length; i++) {
+      this._encrypt(offset + i, blocks[i])
     }
   }
 }

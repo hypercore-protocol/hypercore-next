@@ -8,6 +8,9 @@ test('encrypted append and get', async function (t) {
 
   await a.append(['hello'])
 
+  t.is(a.byteLength, 5)
+  t.is(a.core.tree.byteLength, 5 + a.padding)
+
   const unencrypted = await a.get(0)
   const encrypted = await a.core.blocks.get(0)
 
