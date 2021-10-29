@@ -41,7 +41,6 @@
     "random-array-iterator": "^1.0.0",
     "safety-catch": "^1.0.1",
     "sodium-universal": "^3.0.4",
-    "uint64le": "^1.0.0",
     "xache": "^1.0.0"
   },
   "devDependencies": {
