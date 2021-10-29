@@ -525,7 +525,7 @@ function requireMaybe (name) {
 }
 
 function toHex (buf) {
-  return buf && buf.toString('hex')
+  return buf && b4a.toString(buf, 'hex')
 }
 
 function reduce (iter, fn, acc) {
