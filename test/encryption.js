@@ -59,7 +59,7 @@ test('encrypted replication', async function (t) {
     await t.test('through indirect download', async function (t) {
       await a.append(['f', 'g', 'h', 'i', 'j'])
 
-      for (let i = 0; i < 5; i++) {
+      for (let i = 5; i < 10; i++) {
         t.alike(await b.get(i), await a.get(i))
       }
     })
