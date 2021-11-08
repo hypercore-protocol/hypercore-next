@@ -106,7 +106,8 @@ Make a read stream. Options include:
 {
   start: 0,
   end: core.length,
-  live: false
+  live: false,
+  snapshot: true // auto set end to core.length on open or update it on every read
 }
 ```
 
