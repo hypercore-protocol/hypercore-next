@@ -1,6 +1,6 @@
 const test = require('brittle')
 const ram = require('random-access-memory')
-const crypto = require('../lib/crypto')
+const crypto = require('hypercore-crypto')
 const Hypercore = require('../')
 
 test('preload - storage', async function (t) {
