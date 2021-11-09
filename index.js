@@ -1,7 +1,6 @@
 const { EventEmitter } = require('events')
 const raf = require('random-access-file')
 const isOptions = require('is-options')
-const hypercoreCrypto = require('hypercore-crypto')
 const c = require('compact-encoding')
 const b4a = require('b4a')
 const Xache = require('xache')
@@ -10,6 +9,7 @@ const codecs = require('codecs')
 
 const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 
+const defaultCrypto = require('./lib/crypto')
 const Replicator = require('./lib/replicator')
 const Extensions = require('./lib/extensions')
 const Core = require('./lib/core')
@@ -47,7 +47,7 @@ module.exports = class Hypercore extends EventEmitter {
     this[promises] = true
 
     this.storage = null
-    this.crypto = opts.crypto || hypercoreCrypto
+    this.crypto = opts.crypto || defaultCrypto
     this.core = null
     this.replicator = null
     this.encryption = null

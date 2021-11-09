@@ -1,7 +1,6 @@
 const test = require('brittle')
 const ram = require('random-access-memory')
-const crypto = require('hypercore-crypto')
-
+const crypto = require('../lib/crypto')
 const Hypercore = require('../')
 
 test('sessions - can create writable sessions from a read-only core', async function (t) {
