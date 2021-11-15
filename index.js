@@ -66,7 +66,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.autoClose = !!opts.autoClose
 
     this.closing = null
-    this.opening = this._sessionOpen(key, storage, opts)
+    this.opening = this._openSession(key, storage, opts)
     this.opening.catch(noop)
 
     this._preappend = preappend.bind(this)
@@ -156,7 +156,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.sessions.push(this)
   }
 
-  async _sessionOpen (key, storage, opts) {
+  async _openSession (key, storage, opts) {
     const isRoot = !opts._opening
 
     if (!isRoot) await opts._opening
@@ -179,7 +179,7 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     if (isRoot) {
-      await this._rootOpen(keyPair, storage, opts)
+      await this._openRoot(keyPair, storage, opts)
       // Only the root session should pass capabilities to other sessions.
       for (let i = 0; i < this.sessions.length; i++) {
         const s = this.sessions[i]
@@ -202,7 +202,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.emit('ready')
   }
 
-  async _rootOpen (keyPair, storage, opts) {
+  async _openRoot (keyPair, storage, opts) {
     if (opts.from) return this._openFromExisting(opts.from, opts)
 
     if (!this.storage) this.storage = Hypercore.defaultStorage(opts.storage || storage)
