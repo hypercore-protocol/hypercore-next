@@ -196,10 +196,10 @@ module.exports = class Hypercore extends EventEmitter {
       this.valueEncoding = c.from(codecs(opts.valueEncoding))
     }
 
-    if (opts.postload) await opts.postload(this)
+    if (opts._preready) await opts._preready(this)
 
-    this.emit('ready')
     this.opened = true
+    this.emit('ready')
   }
 
   async _rootOpen (keyPair, storage, opts) {
