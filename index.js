@@ -157,9 +157,9 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   async _openSession (key, storage, opts) {
-    const isRoot = !opts._opening
+    const isFirst = !opts._opening
 
-    if (!isRoot) await opts._opening
+    if (!isFirst) await opts._opening
     if (opts.preload) opts = { ...opts, ...(await opts.preload()) }
 
     const keyPair = (key && opts.keyPair)
@@ -178,8 +178,8 @@ module.exports = class Hypercore extends EventEmitter {
       this.sign = Core.createSigner(this.crypto, keyPair)
     }
 
-    if (isRoot) {
-      await this._openRoot(keyPair, storage, opts)
+    if (isFirst) {
+      await this._openCapabilities(keyPair, storage, opts)
       // Only the root session should pass capabilities to other sessions.
       for (let i = 0; i < this.sessions.length; i++) {
         const s = this.sessions[i]
@@ -202,7 +202,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.emit('ready')
   }
 
-  async _openRoot (keyPair, storage, opts) {
+  async _openCapabilities (keyPair, storage, opts) {
     if (opts.from) return this._openFromExisting(opts.from, opts)
 
     if (!this.storage) this.storage = Hypercore.defaultStorage(opts.storage || storage)
