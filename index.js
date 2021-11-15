@@ -183,9 +183,7 @@ module.exports = class Hypercore extends EventEmitter {
       // Only the root session should pass capabilities to other sessions.
       for (let i = 0; i < this.sessions.length; i++) {
         const s = this.sessions[i]
-        if (s !== this) {
-          s._passCapabilities(this)
-        }
+        if (s !== this) s._passCapabilities(this)
       }
     }
 
@@ -196,6 +194,8 @@ module.exports = class Hypercore extends EventEmitter {
       this.valueEncoding = c.from(codecs(opts.valueEncoding))
     }
 
+    // This is a hidden option that's only used by Corestore.
+    // It's required so that corestore can load a name from userData before 'ready' is emitted.
     if (opts._preready) await opts._preready(this)
 
     this.opened = true
