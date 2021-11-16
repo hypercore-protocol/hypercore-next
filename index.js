@@ -131,7 +131,6 @@ module.exports = class Hypercore extends EventEmitter {
   _passCapabilities (o) {
     if (!this.sign) this.sign = o.sign
     this.crypto = o.crypto
-    this.opened = o.opened
     this.key = o.key
     this.discoveryKey = o.discoveryKey
     this.core = o.core
