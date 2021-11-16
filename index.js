@@ -204,7 +204,7 @@ module.exports = class Hypercore extends EventEmitter {
   async _openCapabilities (keyPair, storage, opts) {
     if (opts.from) return this._openFromExisting(opts.from, opts)
 
-    if (!this.storage) this.storage = Hypercore.defaultStorage(opts.storage || storage)
+    this.storage = Hypercore.defaultStorage(opts.storage || storage)
 
     this.core = await Core.open(this.storage, {
       keyPair,
