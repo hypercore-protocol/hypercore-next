@@ -1,6 +1,7 @@
 const test = require('brittle')
 const ram = require('random-access-memory')
 const crypto = require('hypercore-crypto')
+const codecs = require('codecs')
 
 const Hypercore = require('../')
 
@@ -15,6 +16,7 @@ test('sessions - can create writable sessions from a read-only core', async func
   t.absent(core.writable)
 
   const session = core.session({ keyPair: { secretKey: keyPair.secretKey } })
+  await session.ready()
   t.ok(session.writable)
 
   try {
@@ -74,7 +76,8 @@ test('sessions - writable session with invalid keypair throws', async function (
 
   try {
     const core = new Hypercore(ram, keyPair2.publicKey) // Create a new core in read-only mode.
-    core.session({ keyPair: keyPair1 })
+    const session = core.session({ keyPair: keyPair1 })
+    await session.ready()
     t.fail('invalid keypair did not throw')
   } catch {
     t.pass('invalid keypair threw')
@@ -170,4 +173,36 @@ test('sessions - close with from option', async function (t) {
 
   t.absent(core1.closed)
   t.alike(await core1.get(0), Buffer.from('hello world'))
+})
+
+test('sessions - custom valueEncoding on session', async function (t) {
+  const core1 = new Hypercore(ram)
+  await core1.append(codecs('json').encode({ a: 1 }))
+
+  const core2 = core1.session({ valueEncoding: 'json' })
+  await core2.append({ b: 2 })
+
+  t.alike(await core2.get(0), { a: 1 })
+  t.alike(await core2.get(1), { b: 2 })
+})
+
+test('sessions - custom preload hook on first/later sessions', async function (t) {
+  const preloadsTest = t.test('both preload hooks called')
+  preloadsTest.plan(2)
+
+  const core1 = new Hypercore(ram, {
+    preload: () => {
+      preloadsTest.pass('first hook called')
+      return null
+    }
+  })
+  const core2 = core1.session({
+    preload: () => {
+      preloadsTest.pass('second hook called')
+      return null
+    }
+  })
+  await core2.ready()
+
+  await preloadsTest
 })

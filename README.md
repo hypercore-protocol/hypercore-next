@@ -63,11 +63,15 @@ Note that `tree`, `data`, and `bitfield` are normally heavily sparse files.
   createIfMissing: true, // create a new Hypercore key pair if none was present in storage
   overwrite: false, // overwrite any old Hypercore that might already exist
   valueEncoding: 'json' | 'utf-8' | 'binary', // defaults to binary
-  keyPair: kp // optionally pass the public key and secret key as a key pair
+  encodeBatch: batch => { ... }, // optionally apply an encoding to complete batches
+  keyPair: kp, // optionally pass the public key and secret key as a key pair
+  encryptionKey: k // optionally pass an encryption key to enable block encryption
 }
 ```
 
 You can also set valueEncoding to any [abstract-encoding](https://github.com/mafintosh/abstract-encoding) or [compact-encoding](https://github.com/compact-encoding) instance.
+
+valueEncodings will be applied to individually blocks, even if you append batches. If you want to control encoding at the batch-level, you can use the `encodeBatch` option, which is a function that takes a batch and returns a binary-encoded batch. If you provide a custom valueEncoding, it will not be applied prior to `encodeBatch`.
 
 #### `const seq = await core.append(block)`
 
@@ -83,7 +87,7 @@ Options include
 
 ``` js
 {
-  wait: true, // wait for index to be downloaded
+  wait: true, // wait for block to be downloaded
   onwait: () => {}, // hook that is called if the get is waiting for download
   timeout: 0, // wait at max some milliseconds (0 means no timeout)
   valueEncoding: 'json' | 'utf-8' | 'binary' // defaults to the core's valueEncoding
@@ -96,6 +100,19 @@ Truncate the core to a smaller length.
 
 Per default this will update the fork id of the core to `+ 1`, but you can set the fork id you prefer with the option.
 Note that the fork id should be monotonely incrementing.
+
+#### `const stream = core.createReadStream([options])`
+
+Make a read stream. Options include:
+
+``` js
+{
+  start: 0,
+  end: core.length,
+  live: false,
+  snapshot: true // auto set end to core.length on open or update it on every read
+}
+```
 
 #### `const range = core.download([range])`
 
@@ -113,6 +130,7 @@ A range can have the following properties:
 {
   start: startIndex,
   end: nonInclusiveEndIndex,
+  blocks: [index1, index2, ...],
   linear: false // download range linearly and not randomly
 }
 ```
@@ -123,6 +141,12 @@ To download the full core continously (often referred to as non sparse mode) do
 // Note that this will never be consider downloaded as the range
 // will keep waiting for new blocks to be appended.
 core.download({ start: 0, end: -1 })
+```
+
+To downloaded a discrete range of blocks pass a list of indices.
+
+```js
+core.download({ blocks: [4, 9, 7] });
 ```
 
 To cancel downloading a range simply destroy the range instance.
@@ -195,6 +219,10 @@ In contrast to `core.key` this key does not allow you to verify the data but can
 
 Populated after `ready` has been emitted. Will be `null` before the event.
 
+#### `core.encryptionKey`
+
+Buffer containing the optional block encryption key of this core. Will be `null` unless block encryption is enabled.
+
 #### `core.length`
 
 How many blocks of data are available on this core?
@@ -212,6 +240,10 @@ Populated after `ready` has been emitted. Will be `0` before the event.
 What is the current fork id of this core?
 
 Populated after `ready` has been emitted. Will be `0` before the event.
+
+#### `core.padding`
+
+How much padding is applied to each block of this core? Will be `0` unless block encryption is enabled.
 
 #### `const stream = core.replicate(isInitiatorOrReplicationStream)`
 

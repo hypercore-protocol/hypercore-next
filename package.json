@@ -1,6 +1,6 @@
 {
   "name": "hypercore",
-  "version": "10.0.0-alpha.0",
+  "version": "10.0.0-alpha.17",
   "description": "Hypercore 10",
   "main": "index.js",
   "scripts": {
@@ -27,19 +27,26 @@
     "url": "https://github.com/hypercore-protocol/hypercore/issues"
   },
   "homepage": "https://github.com/hypercore-protocol/hypercore#readme",
+  "files": [
+    "index.js",
+    "lib/**.js"
+  ],
   "dependencies": {
     "@hyperswarm/secret-stream": "^5.0.0",
+    "b4a": "^1.1.0",
     "big-sparse-array": "^1.0.2",
-    "codecs": "^2.2.0",
-    "compact-encoding": "^2.0.0",
+    "codecs": "^3.0.0",
+    "compact-encoding": "^2.5.0",
     "crc32-universal": "^1.0.1",
-    "flat-tree": "^1.7.0",
-    "hypercore-crypto": "^2.1.1",
+    "events": "^3.3.0",
+    "flat-tree": "^1.9.0",
+    "hypercore-crypto": "^3.1.0",
     "is-options": "^1.0.1",
     "random-access-file": "^2.1.4",
     "random-array-iterator": "^1.0.0",
     "safety-catch": "^1.0.1",
-    "uint64le": "^1.0.0"
+    "sodium-universal": "^3.0.4",
+    "xache": "^1.0.0"
   },
   "devDependencies": {
     "brittle": "^1.4.1",

@@ -3,6 +3,8 @@ const raf = require('random-access-file')
 const isOptions = require('is-options')
 const hypercoreCrypto = require('hypercore-crypto')
 const c = require('compact-encoding')
+const b4a = require('b4a')
+const Xache = require('xache')
 const NoiseSecretStream = require('@hyperswarm/secret-stream')
 const codecs = require('codecs')
 
@@ -11,6 +13,8 @@ const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 const Replicator = require('./lib/replicator')
 const Extensions = require('./lib/extensions')
 const Core = require('./lib/core')
+const BlockEncryption = require('./lib/block-encryption')
+const { ReadStream, WriteStream } = require('./lib/streams')
 
 const promises = Symbol.for('hypercore.promises')
 const inspect = Symbol.for('nodejs.util.inspect.custom')
@@ -27,14 +31,17 @@ module.exports = class Hypercore extends EventEmitter {
       opts = key
       key = null
     }
+
     if (key && typeof key === 'string') {
-      key = Buffer.from(key, 'hex')
-    }
-    if (key && key.byteLength !== 32) {
-      throw new Error('Hypercore key should be 32 bytes')
+      key = b4a.from(key, 'hex')
     }
 
     if (!opts) opts = {}
+
+    if (!opts.crypto && key && key.byteLength !== 32) {
+      throw new Error('Hypercore key should be 32 bytes')
+    }
+
     if (!storage) storage = opts.storage
 
     this[promises] = true
@@ -43,9 +50,13 @@ module.exports = class Hypercore extends EventEmitter {
     this.crypto = opts.crypto || hypercoreCrypto
     this.core = null
     this.replicator = null
+    this.encryption = null
     this.extensions = opts.extensions || new Extensions()
+    this.cache = opts.cache === true ? new Xache({ maxSize: 65536, maxAge: 0 }) : (opts.cache || null)
 
     this.valueEncoding = null
+    this.encodeBatch = null
+
     this.key = key || null
     this.discoveryKey = null
     this.readable = true
@@ -57,8 +68,10 @@ module.exports = class Hypercore extends EventEmitter {
     this.autoClose = !!opts.autoClose
 
     this.closing = null
-    this.opening = opts._opening || this._open(key, storage, opts)
+    this.opening = this._openSession(key, storage, opts)
     this.opening.catch(noop)
+
+    this._preappend = preappend.bind(this)
   }
 
   [inspect] (depth, opts) {
@@ -84,12 +97,14 @@ module.exports = class Hypercore extends EventEmitter {
     return noiseStream.rawStream
   }
 
-  static defaultStorage (storage) {
+  static defaultStorage (storage, opts = {}) {
     if (typeof storage !== 'string') return storage
     const directory = storage
+    const toLock = opts.lock || 'oplog'
     return function createFile (name) {
-      const lock = name === 'oplog' ? fsctl.lock : null
-      const sparse = name !== 'oplog' ? fsctl.sparse : null
+      const locked = name === toLock || name.endsWith('/' + toLock)
+      const lock = locked ? fsctl.lock : null
+      const sparse = locked ? null : null // fsctl.sparse, disable sparse on windows - seems to fail for some people. TODO: investigate
       return raf(name, { directory, lock, sparse })
     }
   }
@@ -102,37 +117,124 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     const Clz = opts.class || Hypercore
-    const keyPair = opts.keyPair && opts.keyPair.secretKey && { ...opts.keyPair }
-
-    // This only works if the hypercore was fully loaded,
-    // but we only do this to validate the keypair to help catch bugs so yolo
-    if (this.key && keyPair) keyPair.publicKey = this.key
-
     const s = new Clz(this.storage, this.key, {
       ...opts,
-      sign: opts.sign || (keyPair && keyPair.secretKey && Core.createSigner(this.crypto, keyPair)) || this.sign,
-      valueEncoding: this.valueEncoding,
       extensions: this.extensions,
       _opening: this.opening,
       _sessions: this.sessions
     })
 
-    s._initSession(this)
+    s._passCapabilities(this)
     this.sessions.push(s)
 
     return s
   }
 
-  _initSession (o) {
+  _passCapabilities (o) {
     if (!this.sign) this.sign = o.sign
     this.crypto = o.crypto
-    this.opened = o.opened
     this.key = o.key
     this.discoveryKey = o.discoveryKey
     this.core = o.core
     this.replicator = o.replicator
+    this.encryption = o.encryption
     this.writable = !!this.sign
     this.autoClose = o.autoClose
+  }
+
+  async _openFromExisting (from, opts) {
+    await from.opening
+
+    for (const [name, ext] of this.extensions) {
+      from.extensions.register(name, null, ext)
+    }
+
+    this._passCapabilities(from)
+    this.extensions = from.extensions
+    this.sessions = from.sessions
+    this.storage = from.storage
+
+    this.sessions.push(this)
+  }
+
+  async _openSession (key, storage, opts) {
+    const isFirst = !opts._opening
+
+    if (!isFirst) await opts._opening
+    if (opts.preload) opts = { ...opts, ...(await opts.preload()) }
+
+    const keyPair = (key && opts.keyPair)
+      ? { ...opts.keyPair, publicKey: key }
+      : key
+        ? { publicKey: key, secretKey: null }
+        : opts.keyPair
+
+    // This only works if the hypercore was fully loaded,
+    // but we only do this to validate the keypair to help catch bugs so yolo
+    if (this.key && keyPair) keyPair.publicKey = this.key
+
+    if (opts.sign) {
+      this.sign = opts.sign
+    } else if (keyPair && keyPair.secretKey) {
+      this.sign = Core.createSigner(this.crypto, keyPair)
+    }
+
+    if (isFirst) {
+      await this._openCapabilities(keyPair, storage, opts)
+      // Only the root session should pass capabilities to other sessions.
+      for (let i = 0; i < this.sessions.length; i++) {
+        const s = this.sessions[i]
+        if (s !== this) s._passCapabilities(this)
+      }
+    }
+
+    if (!this.sign) this.sign = this.core.defaultSign
+    this.writable = !!this.sign
+
+    if (opts.valueEncoding) {
+      this.valueEncoding = c.from(codecs(opts.valueEncoding))
+    }
+    if (opts.encodeBatch) {
+      this.encodeBatch = opts.encodeBatch
+    }
+
+    // This is a hidden option that's only used by Corestore.
+    // It's required so that corestore can load a name from userData before 'ready' is emitted.
+    if (opts._preready) await opts._preready(this)
+
+    this.opened = true
+    this.emit('ready')
+  }
+
+  async _openCapabilities (keyPair, storage, opts) {
+    if (opts.from) return this._openFromExisting(opts.from, opts)
+
+    this.storage = Hypercore.defaultStorage(opts.storage || storage)
+
+    this.core = await Core.open(this.storage, {
+      keyPair,
+      crypto: this.crypto,
+      onupdate: this._oncoreupdate.bind(this)
+    })
+
+    if (opts.userData) {
+      for (const [key, value] of Object.entries(opts.userData)) {
+        await this.core.userData(key, value)
+      }
+    }
+
+    this.replicator = new Replicator(this.core, {
+      onupdate: this._onpeerupdate.bind(this)
+    })
+
+    this.discoveryKey = this.crypto.discoveryKey(this.core.header.signer.publicKey)
+    this.key = this.core.header.signer.publicKey
+
+    if (!this.encryption && opts.encryptionKey) {
+      this.encryption = new BlockEncryption(opts.encryptionKey, this.key)
+    }
+
+    this.extensions.attach(this.replicator)
   }
 
   close () {
@@ -200,7 +302,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   get byteLength () {
-    return this.core === null ? 0 : this.core.tree.byteLength
+    return this.core === null ? 0 : this.core.tree.byteLength - (this.core.tree.length * this.padding)
   }
 
   get fork () {
@@ -211,76 +313,28 @@ module.exports = class Hypercore extends EventEmitter {
     return this.replicator === null ? [] : this.replicator.peers
   }
 
-  ready () {
-    return this.opening
+  get encryptionKey () {
+    return this.encryption && this.encryption.key
   }
 
-  async _open (key, storage, opts) {
-    if (opts.preload) opts = { ...opts, ...(await opts.preload()) }
+  get padding () {
+    return this.encryption === null ? 0 : this.encryption.padding
+  }
 
-    this.valueEncoding = opts.valueEncoding ? c.from(codecs(opts.valueEncoding)) : null
-
-    const keyPair = (key && opts.keyPair)
-      ? { ...opts.keyPair, publicKey: key }
-      : key
-        ? { publicKey: key, secretKey: null }
-        : opts.keyPair
-
-    if (opts.from) {
-      const from = opts.from
-      await from.opening
-      for (const [name, ext] of this.extensions) from.extensions.register(name, null, ext)
-      this._initSession(from)
-      this.extensions = from.extensions
-      this.sessions = from.sessions
-      this.storage = from.storage
-      if (!this.sign) this.sign = opts.sign || ((keyPair && keyPair.secretKey) ? Core.createSigner(this.crypto, keyPair) : null)
-      this.writable = !!this.sign
-      this.sessions.push(this)
-      return
-    }
-
-    if (!this.storage) this.storage = Hypercore.defaultStorage(opts.storage || storage)
-
-    this.core = await Core.open(this.storage, {
-      keyPair,
-      crypto: this.crypto,
-      onupdate: this._oncoreupdate.bind(this)
-    })
-
-    if (opts.userData) {
-      for (const [key, value] of Object.entries(opts.userData)) {
-        await this.core.userData(key, value)
-      }
-    }
-
-    this.replicator = new Replicator(this.core, {
-      onupdate: this._onpeerupdate.bind(this)
-    })
-
-    if (!this.sign) this.sign = opts.sign || this.core.defaultSign
-
-    this.discoveryKey = this.crypto.discoveryKey(this.core.header.signer.publicKey)
-    this.key = this.core.header.signer.publicKey
-    this.writable = !!this.sign
-
-    this.extensions.attach(this.replicator)
-    this.opened = true
-
-    if (opts.postload) await opts.postload(this)
-
-    for (let i = 0; i < this.sessions.length; i++) {
-      const s = this.sessions[i]
-      if (s !== this) s._initSession(this)
-      s.emit('ready')
-    }
+  ready () {
+    return this.opening
   }
 
   _oncoreupdate (status, bitfield, value, from) {
     if (status !== 0) {
       for (let i = 0; i < this.sessions.length; i++) {
-        if ((status & 0b10) !== 0) this.sessions[i].emit('truncate', this.core.tree.fork)
-        if ((status & 0b01) !== 0) this.sessions[i].emit('append')
+        if ((status & 0b10) !== 0) {
+          if (this.cache) this.cache.clear()
+          this.sessions[i].emit('truncate', this.core.tree.fork)
+        }
+        if ((status & 0b01) !== 0) {
+          this.sessions[i].emit('append')
+        }
       }
 
       this.replicator.broadcastInfo()
@@ -293,8 +347,10 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     if (value) {
+      const byteLength = value.byteLength - this.padding
+
       for (let i = 0; i < this.sessions.length; i++) {
-        this.sessions[i].emit('download', bitfield.start, value, from)
+        this.sessions[i].emit('download', bitfield.start, byteLength, from)
       }
     }
   }
@@ -331,7 +387,7 @@ module.exports = class Hypercore extends EventEmitter {
   async seek (bytes) {
     if (this.opened === false) await this.opening
 
-    const s = this.core.tree.seek(bytes)
+    const s = this.core.tree.seek(bytes, this.padding)
 
     return (await s.update()) || this.replicator.requestSeek(s)
   }
@@ -344,25 +400,64 @@ module.exports = class Hypercore extends EventEmitter {
 
   async get (index, opts) {
     if (this.opened === false) await this.opening
+    const c = this.cache && this.cache.get(index)
+    if (c) return c
+    const fork = this.core.tree.fork
+    const b = await this._get(index, opts)
+    if (this.cache && fork === this.core.tree.fork && b) this.cache.set(index, b)
+    return b
+  }
+
+  async _get (index, opts) {
     const encoding = (opts && opts.valueEncoding && c.from(codecs(opts.valueEncoding))) || this.valueEncoding
 
-    if (this.core.bitfield.get(index)) return decode(encoding, await this.core.blocks.get(index))
-    if (opts && opts.onwait) opts.onwait(index)
+    let block
 
-    return decode(encoding, await this.replicator.requestBlock(index))
+    if (this.core.bitfield.get(index)) {
+      block = await this.core.blocks.get(index)
+    } else {
+      if (opts && opts.wait === false) return null
+      if (opts && opts.onwait) opts.onwait(index)
+      block = await this.replicator.requestBlock(index)
+    }
+
+    if (this.encryption) this.encryption.decrypt(index, block)
+    return this._decode(encoding, block)
+  }
+
+  createReadStream (opts) {
+    return new ReadStream(this, opts)
+  }
+
+  createWriteStream (opts) {
+    return new WriteStream(this, opts)
   }
 
   download (range) {
-    const start = (range && range.start) || 0
-    const end = typeof (range && range.end) === 'number' ? range.end : -1 // download all
     const linear = !!(range && range.linear)
 
-    // TODO: support range.blocks
+    let start
+    let end
+    let filter
 
-    const r = Replicator.createRange(start, end, linear)
+    if (range && range.blocks) {
+      const blocks = range.blocks instanceof Set
+        ? range.blocks
+        : new Set(range.blocks)
+
+      start = range.start || (blocks.size ? min(range.blocks) : 0)
+      end = range.end || (blocks.size ? max(range.blocks) + 1 : 0)
+
+      filter = (i) => blocks.has(i)
+    } else {
+      start = (range && range.start) || 0
+      end = typeof (range && range.end) === 'number' ? range.end : -1 // download all
+    }
+
+    const r = Replicator.createRange(start, end, filter, linear)
 
     if (this.opened) this.replicator.addRange(r)
-    else this.opening.then(() => this.replicator.addRange(r))
+    else this.opening.then(() => this.replicator.addRange(r), noop)
 
     return r
   }
@@ -392,22 +487,19 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.opened === false) await this.opening
     if (this.writable === false) throw new Error('Core is not writable')
 
-    const blks = Array.isArray(blocks) ? blocks : [blocks]
-    const buffers = new Array(blks.length)
+    blocks = Array.isArray(blocks) ? blocks : [blocks]
 
-    for (let i = 0; i < blks.length; i++) {
-      const blk = blks[i]
+    const preappend = this.encryption && this._preappend
 
-      const buf = Buffer.isBuffer(blk)
-        ? blk
-        : this.valueEncoding
-          ? c.encode(this.valueEncoding, blk)
-          : Buffer.from(blk)
+    const buffers = this.encodeBatch !== null ? this.encodeBatch(blocks) : new Array(blocks.length)
 
-      buffers[i] = buf
+    if (this.encodeBatch === null) {
+      for (let i = 0; i < blocks.length; i++) {
+        buffers[i] = this._encode(this.valueEncoding, blocks[i])
+      }
     }
 
-    return await this.core.append(buffers, this.sign)
+    return await this.core.append(buffers, this.sign, { preappend })
   }
 
   registerExtension (name, handlers) {
@@ -418,13 +510,37 @@ module.exports = class Hypercore extends EventEmitter {
   onextensionupdate () {
     if (this.replicator !== null) this.replicator.broadcastOptions()
   }
+
+  _encode (enc, val) {
+    const state = { start: this.padding, end: this.padding, buffer: null }
+
+    if (b4a.isBuffer(val)) {
+      if (state.start === 0) return val
+      state.end += val.byteLength
+    } else if (enc) {
+      enc.preencode(state, val)
+    } else {
+      val = b4a.from(val)
+      if (state.start === 0) return val
+      state.end += val.byteLength
+    }
+
+    state.buffer = b4a.allocUnsafe(state.end)
+
+    if (enc) enc.encode(state, val)
+    else state.buffer.set(val, state.start)
+
+    return state.buffer
+  }
+
+  _decode (enc, block) {
+    block = block.subarray(this.padding)
+    if (enc) return c.decode(enc, block)
+    return block
+  }
 }
 
 function noop () {}
-
-function decode (enc, buf) {
-  return enc ? c.decode(enc, buf) : buf
-}
 
 function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
@@ -439,5 +555,27 @@ function requireMaybe (name) {
 }
 
 function toHex (buf) {
-  return buf && buf.toString('hex')
+  return buf && b4a.toString(buf, 'hex')
+}
+
+function reduce (iter, fn, acc) {
+  for (const item of iter) acc = fn(acc, item)
+  return acc
+}
+
+function min (arr) {
+  return reduce(arr, (a, b) => Math.min(a, b), Infinity)
+}
+
+function max (arr) {
+  return reduce(arr, (a, b) => Math.max(a, b), -Infinity)
+}
+
+function preappend (blocks) {
+  const offset = this.core.tree.length
+  const fork = this.core.tree.fork
+
+  for (let i = 0; i < blocks.length; i++) {
+    this.encryption.encrypt(offset + i, blocks[i], fork)
+  }
 }
