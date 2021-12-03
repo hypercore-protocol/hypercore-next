@@ -289,11 +289,13 @@ module.exports = class Hypercore extends EventEmitter {
     const protocolStream = Hypercore.createProtocolStream(isInitiator, opts)
     const noiseStream = protocolStream.noiseStream
     const protocol = noiseStream.userData
+
     if (this.opened) {
       this.replicator.joinProtocol(protocol, this.key, this.discoveryKey)
     } else {
       this.opening.then(() => this.replicator.joinProtocol(protocol, this.key, this.discoveryKey), protocol.destroy.bind(protocol))
     }
+
     return protocolStream
   }
 
