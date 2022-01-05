@@ -58,6 +58,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.encodeBatch = null
 
     this.key = key || null
+    this.keyPair = null
     this.discoveryKey = null
     this.readable = true
     this.writable = false
