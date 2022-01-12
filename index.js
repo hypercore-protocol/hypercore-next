@@ -520,7 +520,7 @@ module.exports = class Hypercore extends EventEmitter {
 
   async treeHash (length) {
     if (length === undefined) {
-      await this.core.ready()
+      await this.ready()
       length = this.core.length
     }
 
