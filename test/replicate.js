@@ -459,3 +459,31 @@ test('can disable downloading from a peer', async function (t) {
   t.is(aUploads, 0)
   t.is(cUploads, a.length)
 })
+
+test('throw an error when a fork is eventually detected', async function (t) {
+  const a = await create()
+  const b = await create(a.key, { keyPair: a.keyPair })
+
+  await a.append(['a0', 'a1'])
+  await b.append(['a0', 'b1', 'b2'])
+
+  const c = await create(a.key)
+
+  t.is(a.key === b.key && a.key === c.key, true)
+
+  replicate(c, a, t)
+
+  const [stream] = replicate(c, b, t)
+
+  const threw = new Promise((resolve) =>
+    stream.on('error', (err) => resolve(err))
+  )
+
+  const request = async (n = 0) => (await c.get(n)).toString()
+
+  const first = await request(1)
+  t.is(first, 'a1')
+
+  request(2)
+  t.is((await threw).message, 'Remote signature does not match')
+})
