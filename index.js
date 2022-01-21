@@ -69,10 +69,15 @@ module.exports = class Hypercore extends EventEmitter {
     this.autoClose = !!opts.autoClose
 
     this.closing = null
-    this.opening = this._openSession(key, storage, opts)
-    this.opening.catch(noop)
+    this.opening = null
 
     this._preappend = preappend.bind(this)
+    this._openLater = opts.eagerOpen !== false ? null : this._openSession.bind(this, key, storage, opts)
+
+    if (this._openLater === null) {
+      this.opening = this._openSession(key, storage, opts)
+      this.opening.catch(noop)
+    }
   }
 
   [inspect] (depth, opts) {
@@ -268,7 +273,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   async _close () {
-    await this.opening
+    await this.ready()
 
     const i = this.sessions.indexOf(this)
     if (i === -1) return
@@ -330,6 +335,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   ready () {
+    if (this.opening === null) this.opening = this._openLater()
     return this.opening
   }
 
@@ -381,12 +387,12 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   async setUserData (key, value) {
-    if (this.opened === false) await this.opening
+    if (this.opened === false) await this.ready()
     return this.core.userData(key, value)
   }
 
   async getUserData (key) {
-    if (this.opened === false) await this.opening
+    if (this.opened === false) await this.ready()
     for (const { key: savedKey, value } of this.core.header.userData) {
       if (key === savedKey) return value
     }
@@ -394,14 +400,14 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   async update () {
-    if (this.opened === false) await this.opening
+    if (this.opened === false) await this.ready()
     // TODO: add an option where a writer can bootstrap it's state from the network also
     if (this.writable) return false
     return this.replicator.requestUpgrade()
   }
 
   async seek (bytes) {
-    if (this.opened === false) await this.opening
+    if (this.opened === false) await this.ready()
 
     const s = this.core.tree.seek(bytes, this.padding)
 
@@ -409,13 +415,13 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   async has (index) {
-    if (this.opened === false) await this.opening
+    if (this.opened === false) await this.ready()
 
     return this.core.bitfield.get(index)
   }
 
   async get (index, opts) {
-    if (this.opened === false) await this.opening
+    if (this.opened === false) await this.ready()
     const c = this.cache && this.cache.get(index)
     if (c) return c
     const fork = this.core.tree.fork
@@ -489,7 +495,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   async truncate (newLength = 0, fork = -1) {
-    if (this.opened === false) await this.opening
+    if (this.opened === false) await this.ready()
     if (this.writable === false) throw new Error('Core is not writable')
 
     if (fork === -1) fork = this.core.tree.fork + 1
@@ -500,7 +506,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   async append (blocks) {
-    if (this.opened === false) await this.opening
+    if (this.opened === false) await this.ready()
     if (this.writable === false) throw new Error('Core is not writable')
 
     blocks = Array.isArray(blocks) ? blocks : [blocks]
