@@ -46,6 +46,7 @@
     "random-array-iterator": "^1.0.0",
     "safety-catch": "^1.0.1",
     "sodium-universal": "^3.0.4",
+    "turbo-hash-map": "^1.0.2",
     "xache": "^1.0.0"
   },
   "devDependencies": {
