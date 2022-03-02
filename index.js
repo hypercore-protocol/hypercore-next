@@ -11,6 +11,7 @@ const codecs = require('codecs')
 const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 
 const Replicator = require('./lib/replicator')
+const Protocol = require('./lib/protocol')
 const Extensions = require('./lib/extensions')
 const Core = require('./lib/core')
 const BlockEncryption = require('./lib/block-encryption')
@@ -56,10 +57,10 @@ module.exports = class Hypercore extends EventEmitter {
 
     this.valueEncoding = null
     this.encodeBatch = null
+    this.activeRequests = []
 
     this.key = key || null
     this.keyPair = null
-    this.discoveryKey = null
     this.readable = true
     this.writable = false
     this.opened = false
@@ -94,10 +95,17 @@ module.exports = class Hypercore extends EventEmitter {
       indent + ')'
   }
 
+  static muxer (stream) {
+    return stream.noiseStream.userData.muxer
+  }
+
   static createProtocolStream (isInitiator, opts = {}) {
-    let outerStream = isStream(isInitiator)
-      ? isInitiator
-      : opts.stream
+    let outerStream = isMuxer(isInitiator)
+      ? isInitiator.stream
+      : isStream(isInitiator)
+        ? isInitiator
+        : opts.stream
+
     let noiseStream = null
 
     if (outerStream) {
@@ -109,8 +117,11 @@ module.exports = class Hypercore extends EventEmitter {
     if (!noiseStream) throw new Error('Invalid stream')
 
     if (!noiseStream.userData) {
-      const protocol = Replicator.createProtocol(noiseStream, opts)
-      if (opts.keepAlive !== false) protocol.setKeepAlive(true)
+      const protocol = new Protocol(noiseStream, opts)
+      if (opts.keepAlive !== false) {
+        noiseStream.setKeepAlive(5000)
+        noiseStream.setTimeout(7000)
+      }
       noiseStream.userData = protocol
       noiseStream.on('error', noop) // All noise errors already propagate through outerStream
     }
@@ -159,7 +170,6 @@ module.exports = class Hypercore extends EventEmitter {
     if (!this.sign) this.sign = o.sign
     this.crypto = o.crypto
     this.key = o.key
-    this.discoveryKey = o.discoveryKey
     this.core = o.core
     this.replicator = o.replicator
     this.encryption = o.encryption
@@ -250,14 +260,15 @@ module.exports = class Hypercore extends EventEmitter {
       }
     }
 
-    this.replicator = new Replicator(this.core, {
-      onupdate: this._onpeerupdate.bind(this),
-      onupload: this._onupload.bind(this)
-    })
-
-    this.discoveryKey = this.crypto.discoveryKey(this.core.header.signer.publicKey)
     this.key = this.core.header.signer.publicKey
     this.keyPair = this.core.header.signer
+
+    this.replicator = new Replicator(this.core, this.key, {
+      eagerUpdate: true,
+      allowFork: true,
+      onpeerupdate: this._onpeerupdate.bind(this),
+      onupload: this._onupload.bind(this)
+    })
 
     if (!this.encryption && opts.encryptionKey) {
       this.encryption = new BlockEncryption(opts.encryptionKey, this.key)
@@ -283,6 +294,10 @@ module.exports = class Hypercore extends EventEmitter {
     this.writable = false
     this.closed = true
 
+    if (this.replicator !== null) {
+      this.replicator.clearRequests(this.activeRequests)
+    }
+
     if (this.sessions.length) {
       // if this is the last session and we are auto closing, trigger that first to enforce error handling
       if (this.sessions.length === 1 && this.autoClose) await this.sessions[0].close()
@@ -302,12 +317,16 @@ module.exports = class Hypercore extends EventEmitter {
     const protocol = noiseStream.userData
 
     if (this.opened) {
-      this.replicator.joinProtocol(protocol, this.key, this.discoveryKey)
+      this.replicator.attachTo(protocol)
     } else {
-      this.opening.then(() => this.replicator.joinProtocol(protocol, this.key, this.discoveryKey), protocol.destroy.bind(protocol))
+      this.opening.then(() => this.replicator.attachTo(protocol), protocol.destroy.bind(protocol))
     }
 
     return protocolStream
+  }
+
+  get discoveryKey () {
+    return this.replicator === null ? null : this.replicator.discoveryKey
   }
 
   get length () {
@@ -364,13 +383,11 @@ module.exports = class Hypercore extends EventEmitter {
         }
       }
 
-      this.replicator.broadcastInfo()
+      this.replicator.signalUpgrade()
     }
 
-    if (bitfield && !bitfield.drop) { // TODO: support drop!
-      for (let i = 0; i < bitfield.length; i++) {
-        this.replicator.broadcastBlock(bitfield.start + i)
-      }
+    if (bitfield) { // TODO: support drop!
+      this.replicator.broadcastRange(bitfield.start, bitfield.length, bitfield.drop)
     }
 
     if (value) {
@@ -383,7 +400,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   _onpeerupdate (added, peer) {
-    if (added) this.extensions.update(peer)
+  // if (added) this.extensions.update(peer)
     const name = added ? 'peer-add' : 'peer-remove'
 
     for (let i = 0; i < this.sessions.length; i++) {
@@ -404,19 +421,32 @@ module.exports = class Hypercore extends EventEmitter {
     return null
   }
 
-  async update () {
+  async update (opts) {
     if (this.opened === false) await this.opening
+
     // TODO: add an option where a writer can bootstrap it's state from the network also
-    if (this.writable) return false
-    return this.replicator.requestUpgrade()
+    if (this.writable || this.closing !== null) return false
+
+    const activeRequests = (opts && opts.activeRequests) || this.activeRequests
+    const req = this.replicator.addUpgrade(activeRequests)
+
+    return req.promise
   }
 
-  async seek (bytes) {
+  async seek (bytes, opts) {
     if (this.opened === false) await this.opening
 
     const s = this.core.tree.seek(bytes, this.padding)
 
-    return (await s.update()) || this.replicator.requestSeek(s)
+    const offset = await s.update()
+    if (offset) return offset
+
+    if (this.closing !== null) throw new Error('Session is closed')
+
+    const activeRequests = (opts && opts.activeRequests) || this.activeRequests
+    const req = this.replicator.addSeek(activeRequests, s)
+
+    return req.promise
   }
 
   async has (index) {
@@ -427,6 +457,8 @@ module.exports = class Hypercore extends EventEmitter {
 
   async get (index, opts) {
     if (this.opened === false) await this.opening
+    if (this.closing !== null) throw new Error('Session is closed')
+
     const c = this.cache && this.cache.get(index)
     if (c) return c
     const fork = this.core.tree.fork
@@ -445,7 +477,11 @@ module.exports = class Hypercore extends EventEmitter {
     } else {
       if (opts && opts.wait === false) return null
       if (opts && opts.onwait) opts.onwait(index)
-      block = await this.replicator.requestBlock(index)
+
+      const activeRequests = (opts && opts.activeRequests) || this.activeRequests
+      const req = this.replicator.addBlock(activeRequests, index)
+
+      block = await req.promise
     }
 
     if (this.encryption) this.encryption.decrypt(index, block)
@@ -461,42 +497,37 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   download (range) {
-    const linear = !!(range && range.linear)
+    const reqP = this._download(range)
 
-    let start
-    let end
-    let filter
+    // do not crash in the background...
+    reqP.catch(noop)
 
-    if (range && range.blocks) {
-      const blocks = range.blocks instanceof Set
-        ? range.blocks
-        : new Set(range.blocks)
-
-      start = range.start || (blocks.size ? min(range.blocks) : 0)
-      end = range.end || (blocks.size ? max(range.blocks) + 1 : 0)
-
-      filter = (i) => blocks.has(i)
-    } else {
-      start = (range && range.start) || 0
-      end = typeof (range && range.end) === 'number' ? range.end : -1 // download all
+    // TODO: turn this into an actual object...
+    return {
+      async downloaded () {
+        const req = await reqP
+        return req.promise
+      },
+      destroy () {
+        reqP.then(req => req.context.detach(req), noop)
+      }
     }
-
-    const r = Replicator.createRange(start, end, filter, linear)
-
-    if (this.opened) this.replicator.addRange(r)
-    else this.opening.then(() => this.replicator.addRange(r), noop)
-
-    return r
   }
 
-  // TODO: get rid of this / deprecate it?
-  cancel (request) {
-    // Do nothing for now
+  async _download (range) {
+    if (this.opened === false) await this.opening
+    const activeRequests = (range && range.activeRequests) || this.activeRequests
+    return this.replicator.addRange(activeRequests, range)
   }
 
   // TODO: get rid of this / deprecate it?
   undownload (range) {
     range.destroy(null)
+  }
+
+  // TODO: get rid of this / deprecate it?
+  cancel (request) {
+    // Do nothing for now
   }
 
   async truncate (newLength = 0, fork = -1) {
@@ -545,7 +576,7 @@ module.exports = class Hypercore extends EventEmitter {
 
   // called by the extensions
   onextensionupdate () {
-    if (this.replicator !== null) this.replicator.broadcastOptions()
+  // if (this.replicator !== null) this.replicator.broadcastOptions()
   }
 
   _encode (enc, val) {
@@ -583,6 +614,10 @@ function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
 }
 
+function isMuxer (m) {
+  return typeof m === 'object' && m && m.isProtomux === true
+}
+
 function requireMaybe (name) {
   try {
     return require(name)
@@ -593,19 +628,6 @@ function requireMaybe (name) {
 
 function toHex (buf) {
   return buf && b4a.toString(buf, 'hex')
-}
-
-function reduce (iter, fn, acc) {
-  for (const item of iter) acc = fn(acc, item)
-  return acc
-}
-
-function min (arr) {
-  return reduce(arr, (a, b) => Math.min(a, b), Infinity)
-}
-
-function max (arr) {
-  return reduce(arr, (a, b) => Math.max(a, b), -Infinity)
 }
 
 function preappend (blocks) {
