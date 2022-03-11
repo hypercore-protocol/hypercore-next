@@ -99,7 +99,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   static createProtocolStream (isInitiator, opts = {}) {
-    let outerStream = isMuxer(isInitiator)
+    let outerStream = Protomux.isProtomux(isInitiator)
       ? isInitiator.stream
       : isStream(isInitiator)
         ? isInitiator
@@ -660,10 +660,6 @@ function noop () {}
 
 function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
-}
-
-function isMuxer (m) {
-  return typeof m === 'object' && m && m.isProtomux === true
 }
 
 function requireMaybe (name) {
