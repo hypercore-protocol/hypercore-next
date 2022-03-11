@@ -393,7 +393,7 @@ module.exports = class Hypercore extends EventEmitter {
       this.replicator.signalUpgrade()
     }
 
-    if (bitfield) { // TODO: support drop!
+    if (bitfield) {
       this.replicator.broadcastRange(bitfield.start, bitfield.length, bitfield.drop)
     }
 
