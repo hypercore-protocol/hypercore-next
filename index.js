@@ -6,13 +6,12 @@ const c = require('compact-encoding')
 const b4a = require('b4a')
 const Xache = require('xache')
 const NoiseSecretStream = require('@hyperswarm/secret-stream')
+const Protomux = require('protomux')
 const codecs = require('codecs')
 
 const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 
 const Replicator = require('./lib/replicator')
-const Protocol = require('./lib/protocol')
-const Extensions = require('./lib/extensions')
 const Core = require('./lib/core')
 const BlockEncryption = require('./lib/block-encryption')
 const { ReadStream, WriteStream } = require('./lib/streams')
@@ -52,7 +51,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.core = null
     this.replicator = null
     this.encryption = null
-    this.extensions = opts.extensions || new Extensions()
+    this.extensions = opts.extensions || new Map()
     this.cache = opts.cache === true ? new Xache({ maxSize: 65536, maxAge: 0 }) : (opts.cache || null)
 
     this.valueEncoding = null
@@ -95,8 +94,8 @@ module.exports = class Hypercore extends EventEmitter {
       indent + ')'
   }
 
-  static muxer (stream) {
-    return stream.noiseStream.userData.muxer
+  static protomux (stream, opts) {
+    return stream.noiseStream.userData.open(opts)
   }
 
   static createProtocolStream (isInitiator, opts = {}) {
@@ -117,7 +116,11 @@ module.exports = class Hypercore extends EventEmitter {
     if (!noiseStream) throw new Error('Invalid stream')
 
     if (!noiseStream.userData) {
-      const protocol = new Protocol(noiseStream, opts)
+      const protocol = new Protomux(noiseStream)
+
+      if (opts.ondiscoverykey) {
+        protocol.pair({ protocol: 'hypercore/alpha' }, opts.ondiscoverykey)
+      }
       if (opts.keepAlive !== false) {
         noiseStream.setKeepAlive(5000)
         noiseStream.setTimeout(7000)
@@ -273,8 +276,6 @@ module.exports = class Hypercore extends EventEmitter {
     if (!this.encryption && opts.encryptionKey) {
       this.encryption = new BlockEncryption(opts.encryptionKey, this.key)
     }
-
-    this.extensions.attach(this.replicator)
   }
 
   close () {
@@ -293,6 +294,12 @@ module.exports = class Hypercore extends EventEmitter {
     this.readable = false
     this.writable = false
     this.closed = true
+
+    const gc = []
+    for (const ext of this.extensions.values()) {
+      if (ext.session === this) gc.push(ext)
+    }
+    for (const ext of gc) ext.destroy()
 
     if (this.replicator !== null) {
       this.replicator.clearRequests(this.activeRequests)
@@ -402,6 +409,12 @@ module.exports = class Hypercore extends EventEmitter {
   _onpeerupdate (added, peer) {
   // if (added) this.extensions.update(peer)
     const name = added ? 'peer-add' : 'peer-remove'
+
+    if (added) {
+      for (const ext of this.extensions.values()) {
+        peer.extensions.set(ext.name, ext)
+      }
+    }
 
     for (let i = 0; i < this.sessions.length; i++) {
       this.sessions[i].emit(name, peer)
@@ -570,13 +583,48 @@ module.exports = class Hypercore extends EventEmitter {
     return this.crypto.tree(roots)
   }
 
-  registerExtension (name, handlers) {
-    return this.extensions.register(name, handlers)
-  }
+  registerExtension (name, handlers = {}) {
+    if (this.extensions.has(name)) {
+      const ext = this.extensions.get(name)
+      ext.handlers = handlers
+      ext.encoding = c.from(codecs(handlers.encoding) || c.buffer)
+      ext.session = this
+      return ext
+    }
 
-  // called by the extensions
-  onextensionupdate () {
-  // if (this.replicator !== null) this.replicator.broadcastOptions()
+    const ext = {
+      name,
+      handlers,
+      encoding: c.from(codecs(handlers.encoding) || c.buffer),
+      session: this,
+      send (message, peer) {
+        const buffer = c.encode(this.encoding, message)
+        peer.extension(name, buffer)
+      },
+      broadcast (message) {
+        const buffer = c.encode(this.encoding, message)
+        for (const peer of this.session.peers) {
+          peer.extension(name, buffer)
+        }
+      },
+      destroy () {
+        for (const peer of this.session.peers) {
+          peer.extensions.delete(name)
+        }
+        this.session.extensions.delete(name)
+      },
+      _onmessage (state, peer) {
+        const m = this.encoding.decode(state)
+        if (this.handlers.onmessage) this.handlers.onmessage(m, peer)
+      }
+    }
+
+    this.extensions.set(name, ext)
+    for (const peer of this.peers) {
+      peer.extensions.set(name, ext)
+    }
+
+    return ext
   }
 
   _encode (enc, val) {

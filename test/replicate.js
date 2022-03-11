@@ -248,12 +248,7 @@ test('async multiplexing', async function (t) {
   const a1 = await create()
   const b1 = await create(a1.key)
 
-  const a = a1.replicate(true, {
-    keepAlive: false,
-    ondiscoverykey () {
-      a2.replicate(a)
-    }
-  })
+  const a = a1.replicate(true, { keepAlive: false })
   const b = b1.replicate(false, { keepAlive: false })
 
   a.pipe(b).pipe(a)
