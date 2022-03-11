@@ -407,7 +407,6 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   _onpeerupdate (added, peer) {
-  // if (added) this.extensions.update(peer)
     const name = added ? 'peer-add' : 'peer-remove'
 
     if (added) {
