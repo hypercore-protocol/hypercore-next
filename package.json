@@ -42,10 +42,12 @@
     "flat-tree": "^1.9.0",
     "hypercore-crypto": "^3.1.0",
     "is-options": "^1.0.1",
+    "protomux": "^3.0.2",
     "random-access-file": "^2.1.4",
     "random-array-iterator": "^1.0.0",
     "safety-catch": "^1.0.1",
     "sodium-universal": "^3.0.4",
+    "streamx": "^2.12.4",
     "xache": "^1.0.0"
   },
   "devDependencies": {
