@@ -14,7 +14,7 @@ test('basic replication', async function (t) {
 
   replicate(a, b, t)
 
-  const r = b.download({ start: 0, length: a.length })
+  const r = b.download({ start: 0, end: a.length })
 
   await r.downloaded()
 
@@ -37,7 +37,7 @@ test('basic replication from fork', async function (t) {
   let d = 0
   b.on('download', () => d++)
 
-  const r = b.download({ start: 0, length: a.length })
+  const r = b.download({ start: 0, end: a.length })
 
   await r.downloaded()
 
@@ -62,7 +62,7 @@ test('eager replication from bigger fork', async function (t) {
     d++
   })
 
-  const r = b.download({ start: 0, length: a.length })
+  const r = b.download({ start: 0, end: a.length })
   await r.downloaded()
 
   t.is(d, a.length)
@@ -100,7 +100,7 @@ test('bigger download range', async function (t) {
     downloaded.add(index)
   })
 
-  const r = b.download({ start: 0, length: a.length })
+  const r = b.download({ start: 0, end: a.length })
   await r.downloaded()
 
   t.is(b.length, a.length, 'same length')
@@ -118,7 +118,7 @@ test('high latency reorg', async function (t) {
   for (let i = 0; i < 50; i++) await a.append('data')
 
   {
-    const r = b.download({ start: 0, length: a.length })
+    const r = b.download({ start: 0, end: a.length })
     await r.downloaded()
   }
 
@@ -132,7 +132,7 @@ test('high latency reorg', async function (t) {
   replicate(a, b, t)
 
   {
-    const r = b.download({ start: 0, length: a.length })
+    const r = b.download({ start: 0, end: a.length })
     await r.downloaded()
   }
 
@@ -431,7 +431,7 @@ test.skip('can disable downloading from a peer', async function (t) {
   replicate(a, c, t)
 
   {
-    const r = c.download({ start: 0, length: a.length })
+    const r = c.download({ start: 0, end: a.length })
     await r.downloaded()
   }
 
@@ -452,7 +452,7 @@ test.skip('can disable downloading from a peer', async function (t) {
   })
 
   {
-    const r = b.download({ start: 0, length: a.length })
+    const r = b.download({ start: 0, end: a.length })
     await r.downloaded()
   }
 
