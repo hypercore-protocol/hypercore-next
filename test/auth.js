@@ -1,6 +1,7 @@
 const test = require('brittle')
 const ram = require('random-access-memory')
 const crypto = require('hypercore-crypto')
+const sodium = require('sodium-universal')
 const { eventFlush, replicate } = require('./helpers')
 
 const Hypercore = require('../')
@@ -142,3 +143,65 @@ test('multisig hypercore with extension', async function (t) {
 
   t.end()
 })
+
+test('proof-of-work hypercore', async function (t) {
+  t.plan(2)
+
+  const ZEROES = 8
+
+  const auth = {
+    sign: (signable) => {
+      const sig = new Uint8Array(32)
+      const view = new DataView(sig.buffer)
+
+      for (let i = 0; ;) {
+        view.setUint32(0, i++, true)
+        const buf = hash(signable, sig)
+
+        let test = 0
+        for (let j = 0; j < ZEROES / 8; j++) test |= buf[j]
+
+        if (test) continue
+        return sig
+      }
+    },
+    verify: (signable, signature) => {
+      const buf = hash(signable, signature)
+
+      let test = 0
+      for (let j = 0; j < ZEROES / 8; j++) test |= buf[j]
+      return test === 0
+    }
+  }
+
+  const a = new Hypercore(ram, null, {
+    valueEncoding: 'utf-8',
+    auth
+  })
+
+  await a.ready()
+
+  const b = new Hypercore(ram, a.key, {
+    valueEncoding: 'utf-8',
+    auth
+  })
+
+  await b.ready()
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  t.is(a.length, 5)
+
+  replicate(a, b, t)
+
+  const r = b.download({ start: 0, end: a.length })
+  await r.downloaded()
+
+  t.is(b.length, 5)
+})
+
+function hash (...data) {
+  const out = Buffer.alloc(32)
+  sodium.crypto_generichash(out, Buffer.concat(data))
+  return out
+}
