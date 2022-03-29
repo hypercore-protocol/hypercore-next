@@ -20,8 +20,8 @@ test('multisig hypercore', async function (t) {
       return Buffer.concat([sig1, sig2])
     },
     verify: (signable, signature) => {
-      const sig1 = signature.slice(0, 64)
-      const sig2 = signature.slice(64)
+      const sig1 = signature.subarray(0, 64)
+      const sig2 = signature.subarray(64)
 
       return crypto.verify(signable, sig1, k1.publicKey) &&
         crypto.verify(signable, sig2, k2.publicKey)
@@ -77,8 +77,8 @@ test('multisig hypercore with extension', async function (t) {
       }
     },
     verify: (signable, signature) => {
-      const sig1 = signature.slice(0, 64)
-      const sig2 = signature.slice(64)
+      const sig1 = signature.subarray(0, 64)
+      const sig2 = signature.subarray(64)
 
       return crypto.verify(signable, sig1, aKey.publicKey) &&
         crypto.verify(signable, sig2, bKey.publicKey)
