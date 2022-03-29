@@ -546,7 +546,7 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.writable === false) throw new Error('Core is not writable')
 
     if (fork === -1) fork = this.core.tree.fork + 1
-    await this.core.truncate(newLength, fork, this.auth.sign)
+    await this.core.truncate(newLength, fork, this.auth)
 
     // TODO: Should propagate from an event triggered by the oplog
     this.replicator.updateAll()
@@ -568,7 +568,7 @@ module.exports = class Hypercore extends EventEmitter {
       }
     }
 
-    return await this.core.append(buffers, this.auth.sign, { preappend })
+    return await this.core.append(buffers, this.auth, { preappend })
   }
 
   async treeHash (length) {
