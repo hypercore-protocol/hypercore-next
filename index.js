@@ -206,6 +206,8 @@ module.exports = class Hypercore extends EventEmitter {
 
     if (opts.auth) {
       this.auth = opts.auth
+    } else if (opts.sign) {
+      this.auth = Core.createAuth(this.crypto, keyPair, opts)
     } else if (keyPair && keyPair.secretKey) {
       this.auth = Core.createAuth(this.crypto, keyPair)
     }
