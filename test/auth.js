@@ -200,6 +200,37 @@ test('proof-of-work hypercore', async function (t) {
   t.is(b.length, 5)
 })
 
+test('core using custom sign fn', async function (t) {
+  t.plan(2)
+
+  const keyPair = crypto.keyPair()
+
+  const a = new Hypercore(ram, null, {
+    valueEncoding: 'utf-8',
+    sign: (signable) => crypto.sign(signable, keyPair.secretKey),
+    keyPair: {
+      publicKey: keyPair.publicKey
+    }
+  })
+
+  await a.ready()
+
+  const b = new Hypercore(ram, a.key, { valueEncoding: 'utf-8' })
+  await b.ready()
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  t.is(a.length, 5)
+
+  replicate(a, b, t)
+
+  const r = b.download({ start: 0, end: a.length })
+  await r.downloaded()
+
+  t.is(b.length, 5)
+  t.end()
+})
+
 function hash (...data) {
   const out = Buffer.alloc(32)
   sodium.crypto_generichash(out, Buffer.concat(data))
