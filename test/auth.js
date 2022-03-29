@@ -55,7 +55,7 @@ test('multisig hypercore', async function (t) {
 })
 
 test('multisig hypercore with extension', async function (t) {
-  t.plan(2)
+  t.plan(3)
 
   const aKey = crypto.keyPair()
   const bKey = crypto.keyPair()
@@ -89,6 +89,8 @@ test('multisig hypercore with extension', async function (t) {
     auth
   })
 
+  await a.ready()
+
   const b = new Hypercore(ram, a.key, {
     valueEncoding: 'utf-8',
     auth: {
@@ -97,10 +99,9 @@ test('multisig hypercore with extension', async function (t) {
     }
   })
 
-  await a.ready()
   await b.ready()
 
-  const data = 'hello'
+  replicate(a, b, t)
 
   a.registerExtension('multisig-extension', {
     encoding: 'json',
@@ -115,9 +116,10 @@ test('multisig hypercore with extension', async function (t) {
     }
   })
 
-  replicate(a, b, t)
-
   await eventFlush()
+  t.is(b.peers.length, 1)
+
+  const data = 'hello'
 
   const batch = b.core.tree.batch()
   batch.append(b._encode(b.valueEncoding, data))
