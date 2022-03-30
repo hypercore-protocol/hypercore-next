@@ -17,7 +17,7 @@ test('multisig hypercore', async function (t) {
       const sig1 = crypto.sign(signable, k1.secretKey)
       const sig2 = crypto.sign(signable, k2.secretKey)
 
-      return Buffer.concat([sig1, sig2])
+      return b4a.concat([sig1, sig2])
     },
     verify: (signable, signature) => {
       const sig1 = signature.subarray(0, 64)
@@ -69,12 +69,12 @@ test('multisig hypercore with extension', async function (t) {
       const remote = sigs.find(findBySignable)
       const local = crypto.sign(signable, aKey.secretKey)
 
-      return Buffer.concat([local, Buffer.from(remote.signature, 'base64')])
+      return b4a.concat([local, b4a.from(remote.signature, 'base64')])
 
       function findBySignable ({ data }) {
         const batch = a.core.tree.batch()
         batch.append(a._encode(a.valueEncoding, data))
-        return Buffer.compare(batch.signable(), signable) === 0
+        return b4a.compare(batch.signable(), signable) === 0
       }
     },
     verify: (signable, signature) => {
@@ -233,7 +233,7 @@ test('core using custom sign fn', async function (t) {
 })
 
 function hash (...data) {
-  const out = Buffer.alloc(32)
-  sodium.crypto_generichash(out, Buffer.concat(data))
+  const out = new Uint8Array(32)
+  sodium.crypto_generichash(out, b4a.concat(data))
   return out
 }
