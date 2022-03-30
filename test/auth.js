@@ -251,7 +251,7 @@ test('core using custom sign fn', async function (t) {
 })
 
 function hash (...data) {
-  const out = new Uint8Array(32)
+  const out = b4a.alloc(32)
   sodium.crypto_generichash(out, b4a.concat(data))
   return out
 }
