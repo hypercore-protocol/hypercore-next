@@ -56,50 +56,70 @@ test('multisig hypercore', async function (t) {
   t.end()
 })
 
-test('multisig hypercore with extension', async function (t) {
+test('multisig hypercore with instance and extension', async function (t) {
   t.plan(3)
+
+  class MultiSigAuth {
+    constructor (local, remote, opts = {}) {
+      this.local = local
+      this.remote = remote
+
+      this._sign = opts.sign
+        ? opts.sign
+        : s => crypto.sign(s, opts.keyPair.secretKey)
+
+      this.sigs = []
+
+      this.localFirst = b4a.compare(this.local, this.remote) < 0
+    }
+
+    sign (signable) {
+      const sig = this.sigs.find(({ signature }) => {
+        const s = b4a.from(signature, 'base64')
+        return crypto.verify(signable, s, this.remote)
+      })
+
+      if (!sig) throw new Error('No remote signature.')
+
+      const local = this._sign(signable)
+      const remote = b4a.from(sig.signature, 'base64')
+
+      const sigs = []
+      sigs.push(this.localFirst ? local : remote)
+      sigs.push(this.localFirst ? remote : local)
+
+      return b4a.concat(sigs)
+    }
+
+    verify (signable, signature) {
+      const sig1 = signature.subarray(0, 64)
+      const sig2 = signature.subarray(64)
+
+      const key1 = this.localFirst ? this.local : this.remote
+      const key2 = this.localFirst ? this.remote : this.local
+
+      return crypto.verify(signable, sig1, key1) &&
+        crypto.verify(signable, sig2, key2)
+    }
+
+    addSignature (m) {
+      this.sigs.push(m)
+    }
+  }
 
   const aKey = crypto.keyPair()
   const bKey = crypto.keyPair()
 
-  const sigs = []
-
-  const auth = {
-    sign: (signable) => {
-      console.log('hell')
-      const remote = sigs.find(findBySignable)
-      const local = crypto.sign(signable, aKey.secretKey)
-
-      return b4a.concat([local, b4a.from(remote.signature, 'base64')])
-
-      function findBySignable ({ data }) {
-        const batch = a.core.tree.batch()
-        batch.append(a._encode(a.valueEncoding, data))
-        return b4a.compare(batch.signable(), signable) === 0
-      }
-    },
-    verify: (signable, signature) => {
-      const sig1 = signature.subarray(0, 64)
-      const sig2 = signature.subarray(64)
-
-      return crypto.verify(signable, sig1, aKey.publicKey) &&
-        crypto.verify(signable, sig2, bKey.publicKey)
-    }
-  }
-
   const a = new Hypercore(ram, null, {
     valueEncoding: 'utf-8',
-    auth
+    auth: new MultiSigAuth(aKey.publicKey, bKey.publicKey, { keyPair: aKey })
   })
 
   await a.ready()
 
   const b = new Hypercore(ram, a.key, {
     valueEncoding: 'utf-8',
-    auth: {
-      ...auth,
-      sign: null
-    }
+    auth: new MultiSigAuth(bKey.publicKey, aKey.publicKey, { keyPair: bKey })
   })
 
   await b.ready()
@@ -108,15 +128,12 @@ test('multisig hypercore with extension', async function (t) {
 
   a.registerExtension('multisig-extension', {
     encoding: 'json',
-    onmessage: (message, peer) => {
-      sigs.push(message)
-    }
+    onmessage: a.auth.addSignature.bind(a.auth)
   })
 
   const ext = b.registerExtension('multisig-extension', {
     encoding: 'json',
-    onmessage: (message, peer) => {
-    }
+    onmessage: b.auth.addSignature.bind(b.auth)
   })
 
   await eventFlush()
