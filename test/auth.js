@@ -65,12 +65,13 @@ test('multisig hypercore with extension', async function (t) {
 
   const auth = {
     sign: (signable) => {
+      console.log('hell')
       const remote = sigs.find(findBySignable)
       const local = crypto.sign(signable, aKey.secretKey)
 
       return Buffer.concat([local, Buffer.from(remote.signature, 'base64')])
 
-      function findBySignable ({ block }) {
+      function findBySignable ({ data }) {
         const batch = a.core.tree.batch()
         batch.append(a._encode(a.valueEncoding, data))
         return Buffer.compare(batch.signable(), signable) === 0
