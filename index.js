@@ -15,6 +15,7 @@ const Replicator = require('./lib/replicator')
 const Core = require('./lib/core')
 const BlockEncryption = require('./lib/block-encryption')
 const { ReadStream, WriteStream } = require('./lib/streams')
+const errors = require('./lib/errors')
 
 const promises = Symbol.for('hypercore.promises')
 const inspect = Symbol.for('nodejs.util.inspect.custom')
@@ -39,7 +40,7 @@ module.exports = class Hypercore extends EventEmitter {
     if (!opts) opts = {}
 
     if (!opts.crypto && key && key.byteLength !== 32) {
-      throw new Error('Hypercore key should be 32 bytes')
+      throw new errors.BadArgument('Hypercore key should be 32 bytes')
     }
 
     if (!storage) storage = opts.storage
@@ -115,7 +116,7 @@ module.exports = class Hypercore extends EventEmitter {
       noiseStream = new NoiseSecretStream(isInitiator, null, opts)
       outerStream = noiseStream.rawStream
     }
-    if (!noiseStream) throw new Error('Invalid stream')
+    if (!noiseStream) throw new errors.BadArgument('Invalid stream')
 
     if (!noiseStream.userData) {
       const protocol = new Protomux(noiseStream)
@@ -153,7 +154,7 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.closing) {
       // This makes the closing logic alot easier. If this turns out to be a problem
       // in practive, open an issue and we'll try to make a solution for it.
-      throw new Error('Cannot make sessions on a closing core')
+      throw new errors.SessionClosed()
     }
 
     const Clz = opts.class || Hypercore
@@ -516,7 +517,7 @@ module.exports = class Hypercore extends EventEmitter {
     const offset = await s.update()
     if (offset) return offset
 
-    if (this.closing !== null) throw new Error('Session is closed')
+    if (this.closing !== null) throw new errors.SessionClosed()
 
     const activeRequests = (opts && opts.activeRequests) || this.activeRequests
     const req = this.replicator.addSeek(activeRequests, s)
@@ -532,8 +533,8 @@ module.exports = class Hypercore extends EventEmitter {
 
   async get (index, opts) {
     if (this.opened === false) await this.opening
-    if (this.closing !== null) throw new Error('Session is closed')
-    if (this._snapshot !== null && index >= this._snapshot.compatLength) throw new Error('Snapshot not available')
+    if (this.closing !== null) throw new errors.SessionClosed()
+    if (this._snapshot !== null && index >= this._snapshot.compatLength) throw new errors.SnapshotNotAvailable()
 
     const c = this.cache && this.cache.get(index)
     if (c) return c
@@ -608,7 +609,7 @@ module.exports = class Hypercore extends EventEmitter {
 
   async truncate (newLength = 0, fork = -1) {
     if (this.opened === false) await this.opening
-    if (this.writable === false) throw new Error('Core is not writable')
+    if (this.writable === false) throw new errors.SessionNotWritable()
 
     if (fork === -1) fork = this.core.tree.fork + 1
     await this.core.truncate(newLength, fork, this.auth)
@@ -619,7 +620,7 @@ module.exports = class Hypercore extends EventEmitter {
 
   async append (blocks) {
     if (this.opened === false) await this.opening
-    if (this.writable === false) throw new Error('Core is not writable')
+    if (this.writable === false) throw new errors.SessionNotWritable()
 
     blocks = Array.isArray(blocks) ? blocks : [blocks]
 
