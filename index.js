@@ -154,7 +154,7 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.closing) {
       // This makes the closing logic alot easier. If this turns out to be a problem
       // in practive, open an issue and we'll try to make a solution for it.
-      throw SESSION_CLOSED()
+      throw SESSION_CLOSED('Cannot make sessions on a closing core')
     }
 
     const Clz = opts.class || Hypercore
