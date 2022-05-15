@@ -284,6 +284,7 @@ module.exports = class Hypercore extends EventEmitter {
       crypto: this.crypto,
       legacy: opts.legacy,
       auth: opts.auth,
+      encryptionKey: opts.encryptionKey,
       onupdate: this._oncoreupdate.bind(this)
     })
 
@@ -305,8 +306,8 @@ module.exports = class Hypercore extends EventEmitter {
 
     this.replicator.findingPeers += this._findingPeers
 
-    if (!this.encryption && opts.encryptionKey) {
-      this.encryption = new BlockEncryption(opts.encryptionKey, this.key)
+    if (!this.encryption && this.core.header.encryptionKey) {
+      this.encryption = new BlockEncryption(this.core.header.encryptionKey, this.key)
     }
   }
 

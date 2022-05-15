@@ -2,8 +2,14 @@ const test = require('brittle')
 const RAM = require('random-access-memory')
 const Hypercore = require('..')
 const { create, replicate } = require('./helpers')
+const os = require('os')
+const path = require('path')
 
 const encryptionKey = Buffer.alloc(32, 'hello world')
+const tmpDir = path.join(
+  os.tmpdir(),
+  '/hypercore-test/encrypted/' + Math.random().toString(16).slice(2)
+)
 
 test('encrypted append and get', async function (t) {
   const a = await create({ encryptionKey })
@@ -120,4 +126,20 @@ test('encrypted session before ready core', async function (t) {
 
   await a.append(['hello'])
   t.alike(await s.get(0), Buffer.from('hello'))
+})
+
+test('encrypted cores are loaded from storage correctly', async function (t) {
+  const a = new Hypercore(tmpDir, { encryptionKey })
+  await a.ready()
+  await a.append(['hello'])
+  await a.close()
+
+  console.log('next')
+  const b = new Hypercore(tmpDir, { key: a.key })
+  await b.ready()
+  const first = await b.get(0)
+
+  t.alike(b.key, a.key)
+  t.alike(b.encryptionKey, encryptionKey)
+  t.alike(first.toString(), 'hello')
 })
