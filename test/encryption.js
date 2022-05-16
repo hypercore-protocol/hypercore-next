@@ -146,5 +146,4 @@ test('encrypted session on encrypted core, different keys', async function (t) {
 
   const encrypted = await a.get(0)
   t.absent(encrypted.includes('hello'))
-  console.log(encrypted)
 })
