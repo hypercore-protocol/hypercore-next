@@ -190,6 +190,11 @@ module.exports = class Hypercore extends EventEmitter {
     })
 
     s._passCapabilities(this)
+
+    if (opts.encryptionKey) {
+      this.encryption = new BlockEncryption(opts.encryptionKey, this.key)
+    }
+
     this.sessions.push(s)
 
     return s
