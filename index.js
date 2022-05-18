@@ -192,7 +192,14 @@ module.exports = class Hypercore extends EventEmitter {
     s._passCapabilities(this)
 
     if (opts.encryptionKey) {
-      this.encryption = new BlockEncryption(opts.encryptionKey, this.key)
+      // Only override the block encryption if its either not already set or if
+      // the caller provided a different key.
+      if (
+        !this.encryption ||
+        !b4a.equals(this.encryption.key, opts.encryptionKey)
+      ) {
+        this.encryption = new BlockEncryption(opts.encryptionKey, this.key)
+      }
     }
 
     this.sessions.push(s)
