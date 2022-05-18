@@ -31,6 +31,16 @@ exports.replicate = function replicate (a, b, t) {
   return [s1, s2]
 }
 
+exports.unreplicate = function unreplicate (streams) {
+  return Promise.all(streams.map((s) => {
+    return new Promise((resolve) => {
+      s.on('error', () => {})
+      s.on('close', resolve)
+      s.destroy()
+    })
+  }))
+}
+
 exports.eventFlush = async function eventFlush () {
   await new Promise(resolve => setImmediate(resolve))
 }
