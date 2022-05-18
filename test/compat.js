@@ -15,12 +15,15 @@ for (const abi of abis) {
     const core = new Hypercore((file) => new RAO(new RAF(path.join(root, file))))
     await core.ready()
 
-    t.is(core.length, 1000, 'length matches')
+    t.is(core.length, 1000, 'lengths match')
+    t.is(core.contiguousLength, 1000, 'contiguous lengths match')
 
     for (let i = 0; i < 1000; i++) {
       const block = await core.get(i)
 
-      if (!block.equals(Buffer.of(i))) t.fail(`block ${i} diverges`)
+      if (!block.equals(Buffer.of(i))) {
+        return t.fail(`block ${i} diverges`)
+      }
     }
 
     t.pass('blocks match')
