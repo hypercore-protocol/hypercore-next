@@ -537,7 +537,7 @@ test('contiguous length', async function (t) {
   const a = await create()
 
   await a.append(['a', 'b', 'c', 'd', 'e'])
-  t.is(a.contiguousLength, 5)
+  t.is(a.contiguousLength, 5, 'a has all blocks')
 
   const b = await create(a.key)
   t.is(b.contiguousLength, 0)
@@ -548,11 +548,16 @@ test('contiguous length', async function (t) {
   replicate(a, b, t)
 
   await b.download({ blocks: [0, 2, 4] }).downloaded()
-  t.is(b.contiguousLength, 1, 'has 0 through 1')
+  t.is(b.contiguousLength, 1, 'b has 0 through 1')
 
   await b.download({ blocks: [1] }).downloaded()
-  t.is(b.contiguousLength, 3, 'has 0 through 2')
+  t.is(b.contiguousLength, 3, 'b has 0 through 2')
 
   await b.download({ blocks: [3] }).downloaded()
-  t.is(b.contiguousLength, 5, 'has 0 through 4')
+  t.is(b.contiguousLength, 5, 'b has all blocks')
+
+  await a.truncate(2)
+
+  t.is(a.contiguousLength, 2, 'a truncated')
+  t.is(b.contiguousLength, 2, 'b truncated')
 })
