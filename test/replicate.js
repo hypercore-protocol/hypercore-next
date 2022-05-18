@@ -532,3 +532,27 @@ test.skip('can disable downloading from a peer', async function (t) {
   t.is(aUploads, 0)
   t.is(cUploads, a.length)
 })
+
+test('contiguous length', async function (t) {
+  const a = await create()
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+  t.is(a.contiguousLength, 5)
+
+  const b = await create(a.key)
+  t.is(b.contiguousLength, 0)
+
+  let d = 0
+  b.on('download', () => d++)
+
+  replicate(a, b, t)
+
+  await b.download({ blocks: [0, 2, 4] }).downloaded()
+  t.is(b.contiguousLength, 1, 'has 0 through 1')
+
+  await b.download({ blocks: [1] }).downloaded()
+  t.is(b.contiguousLength, 3, 'has 0 through 2')
+
+  await b.download({ blocks: [3] }).downloaded()
+  t.is(b.contiguousLength, 5, 'has 0 through 4')
+})
