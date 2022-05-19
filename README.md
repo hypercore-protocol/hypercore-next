@@ -62,7 +62,7 @@ Note that `tree`, `data`, and `bitfield` are normally heavily sparse files.
 {
   createIfMissing: true, // create a new Hypercore key pair if none was present in storage
   overwrite: false, // overwrite any old Hypercore that might already exist
-  sparse: true, // count unavailable blocks towards core.length and core.byteLength
+  sparse: true, // enable sparse mode, counting unavailable blocks towards core.length and core.byteLength
   valueEncoding: 'json' | 'utf-8' | 'binary', // defaults to binary
   encodeBatch: batch => { ... }, // optionally apply an encoding to complete batches
   keyPair: kp, // optionally pass the public key and secret key as a key pair
