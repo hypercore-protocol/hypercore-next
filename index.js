@@ -590,22 +590,22 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.closing !== null) throw SESSION_CLOSED()
     if (this._snapshot !== null && index >= this._snapshot.compatLength) throw SNAPSHOT_NOT_AVAILABLE()
 
-    let block = this.cache && this.cache.get(index)
+    const block = this.cache && this.cache.get(index)
     if (block) return block
 
-    block = this._get(index, opts)
-    if (this.cache) this.cache.set(index, block)
-
-    return block
+    return this._get(index, opts)
   }
 
   async _get (index, opts) {
+    const self = this
+
     const encoding = (opts && opts.valueEncoding && c.from(codecs(opts.valueEncoding))) || this.valueEncoding
 
     let block
 
     if (this.core.bitfield.get(index)) {
-      block = await this.core.blocks.get(index)
+      block = decode(this.core.blocks.get(index))
+      if (this.cache) this.cache.set(index, block)
     } else {
       if (opts && opts.wait === false) return null
       if (opts && opts.onwait) opts.onwait(index)
@@ -613,11 +613,20 @@ module.exports = class Hypercore extends EventEmitter {
       const activeRequests = (opts && opts.activeRequests) || this.activeRequests
       const req = this.replicator.addBlock(activeRequests, index)
 
-      block = await req.promise
+      block = decode(req.promise)
+      block.then((block) => {
+        if (this.cache) this.cache.set(index, block)
+      })
     }
 
-    if (this.encryption) this.encryption.decrypt(index, block)
-    return this._decode(encoding, block)
+    return block
+
+    async function decode (req) {
+      const block = await req
+
+      if (self.encryption) self.encryption.decrypt(index, block)
+      return self._decode(encoding, block)
+    }
   }
 
   createReadStream (opts) {
@@ -769,7 +778,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   _decode (enc, block) {
-    block = block.subarray(this.padding)
+    if (this.padding) block = block.subarray(this.padding)
     if (enc) return c.decode(enc, block)
     return block
   }

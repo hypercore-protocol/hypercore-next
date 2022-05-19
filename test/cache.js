@@ -1,5 +1,5 @@
 const test = require('brittle')
-const { create } = require('./helpers')
+const { create, replicate } = require('./helpers')
 
 test('cache', async function (t) {
   const a = await create({ cache: true })
@@ -48,4 +48,24 @@ test('clear cache on truncate', async function (t) {
 
   t.alike(await p, Buffer.from('a'))
   t.alike(await q, Buffer.from('d'))
+})
+
+test('cache on replicate', async function (t) {
+  const a = await create()
+  await a.append(['a', 'b', 'c'])
+
+  const b = await create(a.key, { cache: true })
+
+  replicate(a, b, t)
+
+  // These will issue replicator requests
+  const p = b.get(0)
+  const q = b.get(0)
+
+  t.is(await p, await q, 'blocks are identical')
+
+  // This should use the cache
+  const r = b.get(0)
+
+  t.is(await p, await r, 'blocks are identical')
 })
