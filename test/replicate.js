@@ -573,3 +573,19 @@ test('contiguous length after fork', async function (t) {
   await b.download({ start: 0, end: a.length }).downloaded()
   t.is(b.contiguousLength, 3, 'b has all blocks after fork')
 })
+
+test('non-sparse replication', async function (t) {
+  t.plan(5)
+
+  const a = await create()
+  const b = await create(a.key, { sparse: false })
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  replicate(a, b, t)
+
+  b.on('download', (i) => {
+    t.comment(`downloaded block ${i}`)
+    t.is(b.length, b.contiguousLength)
+  })
+})
