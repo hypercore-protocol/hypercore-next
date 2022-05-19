@@ -575,7 +575,7 @@ test('contiguous length after fork', async function (t) {
 })
 
 test('non-sparse replication', async function (t) {
-  t.plan(5)
+  t.plan(6)
 
   const a = await create()
   const b = await create(a.key, { sparse: false })
@@ -584,8 +584,9 @@ test('non-sparse replication', async function (t) {
 
   replicate(a, b, t)
 
-  b.on('download', (i) => {
-    t.comment(`downloaded block ${i}`)
-    t.is(b.length, b.contiguousLength)
-  })
+  b
+    .once('download', () => t.is(b.core.tree.length, 5))
+    .on('download', (i) => {
+      t.is(b.length, b.contiguousLength, `block ${i}`)
+    })
 })
