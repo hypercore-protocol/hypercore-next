@@ -216,7 +216,6 @@ module.exports = class Hypercore extends EventEmitter {
     this.core = o.core
     this.replicator = o.replicator
     this.encryption = o.encryption
-    this.sparse = o.sparse
     this.writable = !!(this.auth && this.auth.sign)
     this.autoClose = o.autoClose
 
