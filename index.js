@@ -615,7 +615,7 @@ module.exports = class Hypercore extends EventEmitter {
 
       block = decode(req.promise)
       block.then((block) => {
-        if (this.cache) this.cache.set(index, block)
+        if (this.cache) this.cache.set(index, Promise.resolve(block))
       })
     }
 
