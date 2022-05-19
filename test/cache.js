@@ -3,7 +3,6 @@ const { create } = require('./helpers')
 
 test('cache', async function (t) {
   const a = await create({ cache: true })
-
   await a.append(['a', 'b', 'c'])
 
   const p = a.get(0)
@@ -14,9 +13,9 @@ test('cache', async function (t) {
 
 test('session cache', async function (t) {
   const a = await create({ cache: true })
-  const s = a.session()
-
   await a.append(['a', 'b', 'c'])
+
+  const s = a.session()
 
   const p = a.get(0)
   const q = s.get(0)
@@ -26,9 +25,9 @@ test('session cache', async function (t) {
 
 test('session cache opt-out', async function (t) {
   const a = await create({ cache: true })
-  const s = a.session({ cache: false })
-
   await a.append(['a', 'b', 'c'])
+
+  const s = a.session({ cache: false })
 
   const p = a.get(0)
   const q = s.get(0)
@@ -36,9 +35,8 @@ test('session cache opt-out', async function (t) {
   t.not(await p, await q, 'blocks are not identical')
 })
 
-test('cache after truncate', async function (t) {
+test('clear cache on truncate', async function (t) {
   const a = await create({ cache: true })
-
   await a.append(['a', 'b', 'c'])
 
   const p = a.get(0)
