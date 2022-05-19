@@ -191,6 +191,9 @@ module.exports = class Hypercore extends EventEmitter {
 
     s._passCapabilities(this)
 
+    // Pass on the cache unless explicitly disabled.
+    if (opts.cache !== false) s.cache = this.cache
+
     if (opts.encryptionKey) {
       // Only override the block encryption if its either not already set or if
       // the caller provided a different key.
@@ -587,12 +590,13 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.closing !== null) throw SESSION_CLOSED()
     if (this._snapshot !== null && index >= this._snapshot.compatLength) throw SNAPSHOT_NOT_AVAILABLE()
 
-    const c = this.cache && this.cache.get(index)
-    if (c) return c
-    const fork = this.core.tree.fork
-    const b = await this._get(index, opts)
-    if (this.cache && fork === this.core.tree.fork && b) this.cache.set(index, b)
-    return b
+    let block = this.cache && this.cache.get(index)
+    if (block) return block
+
+    block = this._get(index, opts)
+    if (this.cache) this.cache.set(index, block)
+
+    return block
   }
 
   async _get (index, opts) {
