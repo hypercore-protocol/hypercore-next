@@ -610,12 +610,15 @@ module.exports = class Hypercore extends EventEmitter {
       if (opts && opts.wait === false) return null
       if (opts && opts.onwait) opts.onwait(index)
 
+      const fork = this.core.tree.fork
       const activeRequests = (opts && opts.activeRequests) || this.activeRequests
       const req = this.replicator.addBlock(activeRequests, index)
 
       block = decode(req.promise)
       block.then((block) => {
-        if (this.cache) this.cache.set(index, Promise.resolve(block))
+        if (this.cache && fork === this.core.tree.fork) {
+          this.cache.set(index, Promise.resolve(block))
+        }
       })
     }
 
