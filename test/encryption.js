@@ -165,3 +165,16 @@ test('encrypted session on encrypted core, different keys', async function (t) {
   const encrypted = await a.get(0)
   t.absent(encrypted.includes('hello'))
 })
+
+test('encrypted core from existing unencrypted core', async function (t) {
+  const a = await create({ encryptionKey: Buffer.alloc(32, 'a') })
+  const b = await create({ from: a, encryptionKey })
+
+  t.alike(b.key, a.key)
+  t.alike(b.encryptionKey, encryptionKey)
+
+  await b.append(['hello'])
+
+  const unencrypted = await b.get(0)
+  t.alike(unencrypted, Buffer.from('hello'))
+})
