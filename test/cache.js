@@ -58,7 +58,7 @@ test('cache on replicate', async function (t) {
 
   replicate(a, b, t)
 
-  // These will issue replicator requests
+  // These will issue a replicator request
   const p = b.get(0)
   const q = b.get(0)
 
