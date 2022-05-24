@@ -596,6 +596,7 @@ module.exports = class Hypercore extends EventEmitter {
     if (!req) req = this._get(index, opts)
 
     let block = await req
+    if (!block) return null
 
     if (this.encryption) {
       // Copy the block as it might be shared with other sessions.
