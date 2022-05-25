@@ -177,6 +177,18 @@ const updated = await core.update()
 console.log('core was updated?', updated, 'length is', core.length)
 ```
 
+#### `const stats = await core.stat()`
+
+Get information about this core, such as its total size in bytes.
+
+The object will look like this:
+
+```js
+Stats {
+  size: 742
+}
+```
+
 #### `await core.close()`
 
 Fully close this core.
@@ -236,12 +248,6 @@ Buffer containing the optional block encryption key of this core. Will be `null`
 #### `core.length`
 
 How many blocks of data are available on this core?
-
-Populated after `ready` has been emitted. Will be `0` before the event.
-
-#### `core.byteLength`
-
-How much data is available on this core in bytes?
 
 Populated after `ready` has been emitted. Will be `0` before the event.
 

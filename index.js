@@ -14,6 +14,7 @@ const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 const Replicator = require('./lib/replicator')
 const Core = require('./lib/core')
 const BlockEncryption = require('./lib/block-encryption')
+const Stats = require('./lib/stats')
 const { ReadStream, WriteStream } = require('./lib/streams')
 const { BAD_ARGUMENT, SESSION_CLOSED, SESSION_NOT_WRITABLE, SNAPSHOT_NOT_AVAILABLE } = require('./lib/errors')
 
@@ -114,7 +115,6 @@ module.exports = class Hypercore extends EventEmitter {
       indent + '  snapshotted: ' + opts.stylize(this.snapshotted, 'boolean') + '\n' +
       indent + '  writable: ' + opts.stylize(this.writable, 'boolean') + '\n' +
       indent + '  length: ' + opts.stylize(this.length, 'number') + '\n' +
-      indent + '  byteLength: ' + opts.stylize(this.byteLength, 'number') + '\n' +
       indent + '  fork: ' + opts.stylize(this.fork, 'number') + '\n' +
       indent + '  sessions: [ ' + opts.stylize(this.sessions.length, 'number') + ' ]\n' +
       indent + '  activeRequests: [ ' + opts.stylize(this.activeRequests.length, 'number') + ' ]\n' +
@@ -423,12 +423,6 @@ module.exports = class Hypercore extends EventEmitter {
       : (this.core === null ? 0 : this.core.tree.length)
   }
 
-  get byteLength () {
-    return this._snapshot
-      ? this._snapshot.byteLength
-      : (this.core === null ? 0 : this.core.tree.byteLength - (this.core.tree.length * this.padding))
-  }
-
   get contiguousLength () {
     return this.core === null ? 0 : this.core.header.contiguousLength
   }
@@ -542,6 +536,10 @@ module.exports = class Hypercore extends EventEmitter {
         this.replicator.updateAll()
       }
     }
+  }
+
+  async stat () {
+    return Stats.from(this.core, this.padding, this._snapshot)
   }
 
   async update (opts) {
