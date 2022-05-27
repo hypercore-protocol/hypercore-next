@@ -177,15 +177,19 @@ const updated = await core.update()
 console.log('core was updated?', updated, 'length is', core.length)
 ```
 
-#### `const stats = await core.stat()`
+#### `const info = await core.info()`
 
 Get information about this core, such as its total size in bytes.
 
 The object will look like this:
 
 ```js
-Stats {
-  size: 742
+Info {
+  length: 18,
+  contiguousLength: 16,
+  byteLength: 742,
+  fork: 0,
+  padding: 8
 }
 ```
 

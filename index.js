@@ -14,7 +14,7 @@ const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 const Replicator = require('./lib/replicator')
 const Core = require('./lib/core')
 const BlockEncryption = require('./lib/block-encryption')
-const Stats = require('./lib/stats')
+const Info = require('./lib/info')
 const { ReadStream, WriteStream } = require('./lib/streams')
 const { BAD_ARGUMENT, SESSION_CLOSED, SESSION_NOT_WRITABLE, SNAPSHOT_NOT_AVAILABLE } = require('./lib/errors')
 
@@ -538,8 +538,10 @@ module.exports = class Hypercore extends EventEmitter {
     }
   }
 
-  async stat () {
-    return Stats.from(this.core, this.padding, this._snapshot)
+  async info () {
+    return this.core === null
+      ? Info.empty()
+      : Info.from(this.core, this.padding, this._snapshot)
   }
 
   async update (opts) {

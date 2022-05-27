@@ -19,10 +19,10 @@ test('basic', async function (t) {
   await core.append('hello')
   await core.append('world')
 
-  const stats = await core.stat()
+  const info = await core.info()
 
   t.is(core.length, 2)
-  t.is(stats.size, 10)
+  t.is(info.byteLength, 10)
   t.is(appends, 2)
 
   t.end()
