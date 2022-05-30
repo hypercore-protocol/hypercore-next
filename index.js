@@ -192,16 +192,10 @@ module.exports = class Hypercore extends EventEmitter {
 
     s._passCapabilities(this)
 
-    if (opts.encryptionKey) {
-      // Only override the block encryption if its either not already set or if
-      // the caller provided a different key.
-      if (
-        !this.encryption ||
-        !b4a.equals(this.encryption.key, opts.encryptionKey)
-      ) {
-        this.encryption = new BlockEncryption(opts.encryptionKey, this.key)
-      }
-    }
+    // Pass on the cache unless explicitly disabled.
+    if (opts.cache !== false) s.cache = this.cache
+
+    ensureEncryption(s, opts)
 
     this.sessions.push(s)
 
@@ -229,6 +223,8 @@ module.exports = class Hypercore extends EventEmitter {
     this.sessions = from.sessions
     this.storage = from.storage
     this.replicator.findingPeers += this._findingPeers
+
+    ensureEncryption(this, opts)
 
     this.sessions.push(this)
   }
@@ -597,33 +593,57 @@ module.exports = class Hypercore extends EventEmitter {
     if (this.closing !== null) throw SESSION_CLOSED()
     if (this._snapshot !== null && index >= this._snapshot.compatLength) throw SNAPSHOT_NOT_AVAILABLE()
 
-    const c = this.cache && this.cache.get(index)
-    if (c) return c
-    const fork = this.core.tree.fork
-    const b = await this._get(index, opts)
-    if (this.cache && fork === this.core.tree.fork && b) this.cache.set(index, b)
-    return b
+    const encoding = (opts && opts.valueEncoding && c.from(codecs(opts.valueEncoding))) || this.valueEncoding
+
+    let req = this.cache && this.cache.get(index)
+    if (!req) req = this._get(index, opts)
+
+    let block = await req
+    if (!block) return null
+
+    if (this.encryption) {
+      // Copy the block as it might be shared with other sessions.
+      block = b4a.from(block)
+
+      this.encryption.decrypt(index, block)
+    }
+
+    return this._decode(encoding, block)
   }
 
   async _get (index, opts) {
-    const encoding = (opts && opts.valueEncoding && c.from(codecs(opts.valueEncoding))) || this.valueEncoding
-
-    let block
+    let req
 
     if (this.core.bitfield.get(index)) {
-      block = await this.core.blocks.get(index)
+      req = this.core.blocks.get(index)
+
+      if (this.cache) this.cache.set(index, req)
     } else {
       if (opts && opts.wait === false) return null
       if (opts && opts.onwait) opts.onwait(index)
 
       const activeRequests = (opts && opts.activeRequests) || this.activeRequests
-      const req = this.replicator.addBlock(activeRequests, index)
 
-      block = await req.promise
+      req = this._cacheOnResolve(
+        index,
+        this.replicator
+          .addBlock(activeRequests, index)
+          .promise,
+        this.core.tree.fork
+      )
     }
 
-    if (this.encryption) this.encryption.decrypt(index, block)
-    return this._decode(encoding, block)
+    return req
+  }
+
+  async _cacheOnResolve (index, req, fork) {
+    const block = await req
+
+    if (this.cache && fork === this.core.tree.fork) {
+      this.cache.set(index, Promise.resolve(block))
+    }
+
+    return block
   }
 
   createReadStream (opts) {
@@ -775,7 +795,7 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   _decode (enc, block) {
-    block = block.subarray(this.padding)
+    if (this.padding) block = block.subarray(this.padding)
     if (enc) return c.decode(enc, block)
     return block
   }
@@ -806,4 +826,12 @@ function preappend (blocks) {
   for (let i = 0; i < blocks.length; i++) {
     this.encryption.encrypt(offset + i, blocks[i], fork)
   }
+}
+
+function ensureEncryption (core, opts) {
+  if (!opts.encryptionKey) return
+  // Only override the block encryption if its either not already set or if
+  // the caller provided a different key.
+  if (core.encryption && b4a.equals(core.encryption.key, opts.encryptionKey)) return
+  core.encryption = new BlockEncryption(opts.encryptionKey, core.key)
 }

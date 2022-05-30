@@ -42,7 +42,7 @@ test('encrypted replication', async function (t) {
 
   await a.append(['a', 'b', 'c', 'd', 'e'])
 
-  t.test('with encryption key', async function (t) {
+  await t.test('with encryption key', async function (t) {
     const b = await create(a.key, { encryptionKey })
 
     replicate(a, b, t)
@@ -62,10 +62,12 @@ test('encrypted replication', async function (t) {
       for (let i = 5; i < 10; i++) {
         t.alike(await b.get(i), await a.get(i))
       }
+
+      await a.truncate(5)
     })
   })
 
-  t.test('without encryption key', async function (t) {
+  await t.test('without encryption key', async function (t) {
     const b = await create(a.key)
 
     replicate(a, b, t)
@@ -85,6 +87,8 @@ test('encrypted replication', async function (t) {
       for (let i = 5; i < 10; i++) {
         t.alike(await b.get(i), await a.core.blocks.get(i))
       }
+
+      await a.truncate(5)
     })
   })
 })
@@ -126,6 +130,9 @@ test('encrypted session on unencrypted core', async function (t) {
   const a = await create()
   const s = a.session({ encryptionKey })
 
+  t.alike(s.encryptionKey, encryptionKey)
+  t.unlike(s.encryptionKey, a.encryptionKey)
+
   await s.append(['hello'])
 
   const unencrypted = await s.get(0)
@@ -135,9 +142,24 @@ test('encrypted session on unencrypted core', async function (t) {
   t.absent(encrypted.includes('hello'))
 })
 
+test('encrypted session on encrypted core, same key', async function (t) {
+  const a = await create({ encryptionKey })
+  const s = a.session({ encryptionKey })
+
+  t.alike(s.encryptionKey, a.encryptionKey)
+
+  await s.append(['hello'])
+
+  const unencrypted = await s.get(0)
+  t.alike(unencrypted, Buffer.from('hello'))
+  t.alike(unencrypted, await a.get(0))
+})
+
 test('encrypted session on encrypted core, different keys', async function (t) {
   const a = await create({ encryptionKey: Buffer.alloc(32, 'a') })
   const s = a.session({ encryptionKey: Buffer.alloc(32, 's') })
+
+  t.unlike(s.encryptionKey, a.encryptionKey)
 
   await s.append(['hello'])
 
@@ -146,4 +168,32 @@ test('encrypted session on encrypted core, different keys', async function (t) {
 
   const encrypted = await a.get(0)
   t.absent(encrypted.includes('hello'))
+})
+
+test('multiple gets to replicated, encrypted block', async function (t) {
+  const a = await create({ encryptionKey })
+  await a.append('a')
+
+  const b = await create(a.key, { encryptionKey })
+
+  replicate(a, b, t)
+
+  const p = b.get(0)
+  const q = b.get(0)
+
+  t.alike(await p, await q)
+  t.alike(await p, Buffer.from('a'))
+})
+
+test('encrypted core from existing unencrypted core', async function (t) {
+  const a = await create({ encryptionKey: Buffer.alloc(32, 'a') })
+  const b = await create({ from: a, encryptionKey })
+
+  t.alike(b.key, a.key)
+  t.alike(b.encryptionKey, encryptionKey)
+
+  await b.append(['hello'])
+
+  const unencrypted = await b.get(0)
+  t.alike(unencrypted, Buffer.from('hello'))
 })
