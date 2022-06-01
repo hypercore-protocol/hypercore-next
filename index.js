@@ -272,7 +272,7 @@ module.exports = class Hypercore extends EventEmitter {
       this.encodeBatch = opts.encodeBatch
     }
 
-    // Start continous replication is non-sparse mode.
+    // Start continous replication if not in sparse mode.
     if (!this.sparse) this.download({ start: 0, end: -1 })
 
     // This is a hidden option that's only used by Corestore.
