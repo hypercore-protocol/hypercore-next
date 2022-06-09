@@ -726,7 +726,7 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     const roots = await this.core.tree.getRoots(length)
-    return this.crypto.tree(roots)
+    return this.core.crypto.tree(roots)
   }
 
   registerExtension (name, handlers = {}) {
