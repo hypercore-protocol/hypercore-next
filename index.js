@@ -297,7 +297,8 @@ module.exports = class Hypercore extends EventEmitter {
       crypto: this.crypto,
       legacy: opts.legacy,
       auth: opts.auth,
-      onupdate: this._oncoreupdate.bind(this)
+      onupdate: this._oncoreupdate.bind(this),
+      oncontigupdate: this._oncorecontigupdate.bind(this)
     })
 
     if (opts.userData) {
@@ -484,9 +485,10 @@ module.exports = class Hypercore extends EventEmitter {
           if (s._snapshot && bitfield.start < s._snapshot.compatLength) s._snapshot.compatLength = bitfield.start
         }
 
-        if (appended && s.sparse) {
-          s.emit('append')
-        }
+        // For sparse sessions, immediately emit appends. Non-sparse sessions
+        // are handled separately and only emit appends when their contiguous
+        // length is updated.
+        if (appended && s.sparse) s.emit('append')
       }
 
       this.replicator.onupgrade()
@@ -503,6 +505,12 @@ module.exports = class Hypercore extends EventEmitter {
         this.sessions[i].emit('download', bitfield.start, byteLength, from)
       }
     }
+  }
+
+  _oncorecontigupdate () {
+    // For non-sparse sessions, emit appends only when the contiguous length is
+    // updated.
+    if (!this.sparse) this.emit('append')
   }
 
   _onpeerupdate (added, peer) {
