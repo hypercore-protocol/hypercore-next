@@ -484,16 +484,8 @@ module.exports = class Hypercore extends EventEmitter {
           if (s._snapshot && bitfield.start < s._snapshot.compatLength) s._snapshot.compatLength = bitfield.start
         }
 
-        if (appended) {
-          let emit = false
-
-          // Always emit appends in sparse mode
-          if (s.sparse) emit = true
-          // In non-sparse mode, only emit appends if the contiguous length is
-          // also updated
-          else if (bitfield) emit = bitfield.start === s.contiguousLength
-
-          if (emit) s.emit('append')
+        if (appended && s.sparse) {
+          s.emit('append')
         }
       }
 
