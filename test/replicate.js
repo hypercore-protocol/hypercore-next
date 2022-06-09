@@ -609,9 +609,26 @@ test('non-sparse replication', async function (t) {
 
   replicate(a, b, t)
 
+  let contiguousLength = 0
+
   b
+    // The tree length should be updated to the full length when the first block
+    // is downloaded.
     .once('download', () => t.is(b.core.tree.length, 5))
+
+    // When blocks are downloaded, the reported length should always match the
+    // contiguous length.
     .on('download', (i) => {
       t.is(b.length, b.contiguousLength, `block ${i}`)
+    })
+
+    // Appends should only be emitted when the contiguous length is updated and
+    // never when it's zero.
+    .on('append', () => {
+      if (contiguousLength >= b.contiguousLength) {
+        t.fail('append emitted before contiguous length updated')
+      }
+
+      contiguousLength = b.contiguousLength
     })
 })
