@@ -510,7 +510,11 @@ module.exports = class Hypercore extends EventEmitter {
   _oncorecontigupdate () {
     // For non-sparse sessions, emit appends only when the contiguous length is
     // updated.
-    if (!this.sparse) this.emit('append')
+    for (let i = 0; i < this.sessions.length; i++) {
+      const s = this.sessions[i]
+
+      if (!s.sparse) s.emit('append')
+    }
   }
 
   _onpeerupdate (added, peer) {
