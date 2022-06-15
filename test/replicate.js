@@ -691,3 +691,26 @@ test('download blocks if available, destroy midway', async function (t) {
 
   t.pass('range resolved')
 })
+
+test('download blocks available from when only a partial set is available', async function (t) {
+  const a = await create()
+  const b = await create(a.key)
+  const c = await create(a.key)
+
+  replicate(a, b, t)
+  replicate(b, c, t)
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  await b.get(2)
+  await b.get(3)
+
+  const r = c.download({ start: 0, end: -1, ifAvailable: true })
+  await r.downloaded()
+
+  t.ok(!(await c.has(0)))
+  t.ok(!(await c.has(1)))
+  t.ok(await c.has(2))
+  t.ok(await c.has(3))
+  t.ok(!(await c.has(4)))
+})
