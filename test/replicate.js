@@ -715,7 +715,7 @@ test('download blocks available from when only a partial set is available', asyn
   t.ok(!(await c.has(4)))
 })
 
-test.solo('download range resolves immediately if no peers', async function (t) {
+test('download range resolves immediately if no peers', async function (t) {
   const a = await create()
   const b = await create(a.key)
 
