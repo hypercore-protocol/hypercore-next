@@ -638,3 +638,56 @@ test('non-sparse replication', async function (t) {
 
   t.is(contiguousLength, b.length)
 })
+
+test('download blocks if available', async function (t) {
+  const a = await create()
+  const b = await create(a.key)
+
+  replicate(a, b, t)
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  let d = 0
+  b.on('download', () => d++)
+
+  const r = b.download({ blocks: [1, 3, 6], ifAvailable: true })
+  await r.downloaded()
+
+  t.alike(d, 2)
+})
+
+test('download range if available', async function (t) {
+  const a = await create()
+  const b = await create(a.key)
+
+  replicate(a, b, t)
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  let d = 0
+  b.on('download', () => d++)
+
+  const r = b.download({ start: 2, end: 6, ifAvailable: true })
+  await r.downloaded()
+
+  t.alike(d, 3)
+})
+
+test('download blocks if available, destroy midway', async function (t) {
+  const a = await create()
+  const b = await create(a.key)
+
+  const s = replicate(a, b, t)
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  let d = 0
+  b.on('download', () => {
+    if (d++ === 0) unreplicate(s)
+  })
+
+  const r = b.download({ blocks: [1, 3, 6], ifAvailable: true })
+  await r.downloaded()
+
+  t.alike(d, 1)
+})
