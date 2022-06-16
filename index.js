@@ -575,7 +575,10 @@ module.exports = class Hypercore extends EventEmitter {
 
     if (!this.sparse) {
       // Download all available blocks in non-sparse mode
-      await this.download({ start: this.length, end: -1, ifAvailable: true }).downloaded()
+      const start = this.length
+      const end = this.core.tree.length
+
+      await this.download({ start, end, ifAvailable: true }).downloaded()
     }
 
     if (!this.snapshotted) return req.promise
