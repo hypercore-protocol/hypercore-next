@@ -573,6 +573,11 @@ module.exports = class Hypercore extends EventEmitter {
     const activeRequests = (opts && opts.activeRequests) || this.activeRequests
     const req = this.replicator.addUpgrade(activeRequests)
 
+    if (!this.sparse) {
+      // Download all available data in non-sparse mode
+      await this.download({ start: this.length, end: -1, ifAvailable: true }).downloaded()
+    }
+
     if (!this.snapshotted) return req.promise
     if (!(await req.promise)) return false
 
