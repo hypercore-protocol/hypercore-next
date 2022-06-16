@@ -573,6 +573,8 @@ module.exports = class Hypercore extends EventEmitter {
     const activeRequests = (opts && opts.activeRequests) || this.activeRequests
     const req = this.replicator.addUpgrade(activeRequests)
 
+    const upgraded = await req.promise
+
     if (!this.sparse) {
       // Download all available blocks in non-sparse mode
       const start = this.length
@@ -581,10 +583,9 @@ module.exports = class Hypercore extends EventEmitter {
       await this.download({ start, end, ifAvailable: true }).downloaded()
     }
 
-    if (!this.snapshotted) return req.promise
-    if (!(await req.promise)) return false
-
-    return this._updateSnapshot()
+    if (!upgraded) return false
+    if (this.snapshotted) return this._updateSnapshot()
+    return true
   }
 
   async seek (bytes, opts) {
