@@ -737,4 +737,5 @@ test('download available blocks on non-sparse update', async function (t) {
   await b.update()
 
   t.is(b.contiguousLength, 5)
+  t.is(b.length, b.contiguousLength)
 })
