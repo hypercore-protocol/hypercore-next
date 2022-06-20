@@ -757,3 +757,28 @@ test('non-sparse snapshot during replication', async function (t) {
   t.is(s.contiguousLength, 5)
   t.is(s.length, s.contiguousLength)
 })
+
+test('non-sparse snapshot during partial replication', async function (t) {
+  const a = await create()
+  const b = await create(a.key)
+  const c = await create(a.key, { sparse: false })
+
+  replicate(a, b, t)
+  replicate(b, c, t)
+
+  await a.append(['a', 'b', 'c', 'd', 'e'])
+
+  await b.download({ start: 0, end: 3 }).downloaded()
+  await c.update()
+
+  const s = c.snapshot()
+
+  await b.download({ start: 3, end: 5 }).downloaded()
+  await c.update()
+
+  t.is(c.contiguousLength, 5)
+  t.is(c.length, s.contiguousLength)
+
+  t.is(s.contiguousLength, 3)
+  t.is(s.length, s.contiguousLength)
+})
