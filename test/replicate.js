@@ -770,9 +770,11 @@ test('non-sparse snapshot during partial replication', async function (t) {
   await c.update()
 
   const s = c.snapshot()
+  t.is(s.contiguousLength, s.length)
 
   await b.download({ start: 3, end: 5 }).downloaded()
-  await c.update()
-
   t.is(s.contiguousLength, s.length)
+
+  await s.update()
+  t.not(s.contiguousLength, s.length)
 })
