@@ -599,7 +599,7 @@ module.exports = class Hypercore extends EventEmitter {
 
       await this.download({ start, end, ifAvailable: true }).downloaded()
 
-      upgraded = this.contiguousLength !== contig
+      if (!upgraded) upgraded = this.contiguousLength !== contig
     }
 
     if (!upgraded) return false
