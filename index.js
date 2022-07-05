@@ -656,12 +656,12 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   async _get (index, opts) {
-    let req
+    let block
 
     if (this.core.bitfield.get(index)) {
-      req = this.core.blocks.get(index)
+      block = this.core.blocks.get(index)
 
-      if (this.cache) this.cache.set(index, req)
+      if (this.cache) this.cache.set(index, block)
     } else {
       if (opts && opts.wait === false) return null
       if (opts && opts.onwait) opts.onwait(index)
@@ -669,16 +669,17 @@ module.exports = class Hypercore extends EventEmitter {
 
       const activeRequests = (opts && opts.activeRequests) || this.activeRequests
 
-      req = this._cacheOnResolve(
-        index,
-        this.replicator
-          .addBlock(activeRequests, index)
-          .promise,
-        this.core.tree.fork
-      )
+      const req = this.replicator.addBlock(activeRequests, index)
+
+      if (req.context !== null) {
+        // TODO: should we handle the returned request?
+        this.replicator.addWant(activeRequests, req.context)
+      }
+
+      block = this._cacheOnResolve(index, req.promise, this.core.tree.fork)
     }
 
-    return req
+    return block
   }
 
   async _cacheOnResolve (index, req, fork) {
@@ -719,8 +720,17 @@ module.exports = class Hypercore extends EventEmitter {
 
   async _download (range) {
     if (this.opened === false) await this.opening
+
     const activeRequests = (range && range.activeRequests) || this.activeRequests
-    return this.replicator.addRange(activeRequests, range)
+
+    const req = this.replicator.addRange(activeRequests, range)
+
+    if (req.context !== null) {
+      // TODO: should we handle the returned request?
+      this.replicator.addWant(activeRequests, req.context)
+    }
+
+    return req
   }
 
   // TODO: get rid of this / deprecate it?
