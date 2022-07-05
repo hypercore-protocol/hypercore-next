@@ -671,10 +671,7 @@ module.exports = class Hypercore extends EventEmitter {
 
       const req = this.replicator.addBlock(activeRequests, index)
 
-      if (req.context !== null) {
-        // TODO: should we handle the returned request?
-        this.replicator.addWant(activeRequests, req.context)
-      }
+      if (req.context !== null) this.replicator.addWant(req.context)
 
       block = this._cacheOnResolve(index, req.promise, this.core.tree.fork)
     }
@@ -725,10 +722,7 @@ module.exports = class Hypercore extends EventEmitter {
 
     const req = this.replicator.addRange(activeRequests, range)
 
-    if (req.context !== null) {
-      // TODO: should we handle the returned request?
-      this.replicator.addWant(activeRequests, req.context)
-    }
+    if (req.context !== null) this.replicator.addWant(req.context)
 
     return req
   }
