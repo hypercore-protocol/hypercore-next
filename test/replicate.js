@@ -838,3 +838,32 @@ test('sparse replication without gossiping, range', async function (t) {
   await c.download({ start: 4, end: 6 }).downloaded()
   t.pass('resolved')
 })
+
+test('sparse replication without gossiping, discrete range', async function (t) {
+  const a = await create()
+  const b = await create(a.key)
+  const c = await create(a.key)
+
+  await a.append(['a', 'b', 'c'])
+
+  let s
+
+  s = replicate(a, b)
+  await b.download({ start: 0, end: 3 }).downloaded()
+  await unreplicate(s)
+
+  s = replicate(b, c)
+  await c.download({ start: 0, end: 3 }).downloaded()
+  await unreplicate(s)
+
+  await a.append(['d', 'e', 'f', 'g'])
+
+  s = replicate(a, b)
+  await b.download({ start: 4, end: 7 }).downloaded()
+  await unreplicate(s)
+
+  s = replicate(b, c)
+
+  await c.download({ blocks: [4, 6] }).downloaded()
+  t.pass('resolved')
+})
