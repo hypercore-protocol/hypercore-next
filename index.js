@@ -70,6 +70,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.sessions = opts._sessions || [this]
     this.auth = opts.auth || null
     this.autoClose = !!opts.autoClose
+    this.onwait = opts.onwait || null
 
     this.closing = null
     this.opening = this._openSession(key, storage, opts)
@@ -184,10 +185,12 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     const sparse = opts.sparse === false ? false : this.sparse
+    const onwait = opts.onwait === undefined ? this.onwait : opts.onwait
     const Clz = opts.class || Hypercore
     const s = new Clz(this.storage, this.key, {
       ...opts,
       sparse,
+      onwait,
       _opening: this.opening,
       _sessions: this.sessions
     })
@@ -662,6 +665,7 @@ module.exports = class Hypercore extends EventEmitter {
     } else {
       if (opts && opts.wait === false) return null
       if (opts && opts.onwait) opts.onwait(index)
+      else if (this.onwait) this.onwait(index)
 
       const activeRequests = (opts && opts.activeRequests) || this.activeRequests
 
