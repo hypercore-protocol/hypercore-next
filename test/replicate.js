@@ -827,4 +827,11 @@ test('sparse replication without gossiping', async function (t) {
     await c.download({ blocks: [4, 6] }).downloaded()
     t.pass('resolved')
   })
+
+  await t.test('seek', async function (t) {
+    s = replicate(b, c)
+    t.teardown(() => unreplicate(s))
+
+    t.alike(await c.seek(4), [4, 0])
+  })
 })
