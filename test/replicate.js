@@ -785,7 +785,6 @@ test('non-sparse snapshot during partial replication', async function (t) {
 test('sparse replication without gossiping', async function (t) {
   const a = await create()
   const b = await create(a.key)
-  const c = await create(a.key)
 
   await a.append(['a', 'b', 'c'])
 
@@ -795,10 +794,6 @@ test('sparse replication without gossiping', async function (t) {
   await b.download({ start: 0, end: 3 }).downloaded()
   await unreplicate(s)
 
-  s = replicate(b, c)
-  await c.download({ start: 0, end: 3 }).downloaded()
-  await unreplicate(s)
-
   await a.append(['d', 'e', 'f', 'd'])
 
   s = replicate(a, b)
@@ -806,6 +801,8 @@ test('sparse replication without gossiping', async function (t) {
   await unreplicate(s)
 
   await t.test('block', async function (t) {
+    const c = await create(a.key)
+
     s = replicate(b, c)
     t.teardown(() => unreplicate(s))
 
@@ -813,6 +810,8 @@ test('sparse replication without gossiping', async function (t) {
   })
 
   await t.test('range', async function (t) {
+    const c = await create(a.key)
+
     s = replicate(b, c)
     t.teardown(() => unreplicate(s))
 
@@ -821,6 +820,8 @@ test('sparse replication without gossiping', async function (t) {
   })
 
   await t.test('discrete range', async function (t) {
+    const c = await create(a.key)
+
     s = replicate(b, c)
     t.teardown(() => unreplicate(s))
 
@@ -829,6 +830,8 @@ test('sparse replication without gossiping', async function (t) {
   })
 
   await t.test('seek', async function (t) {
+    const c = await create(a.key)
+
     s = replicate(b, c)
     t.teardown(() => unreplicate(s))
 
