@@ -534,6 +534,20 @@ module.exports = class Hypercore extends EventEmitter {
 
       if (!s.sparse) s.emit('append')
     }
+
+    // When the contiguous length catches up, broadcast the non-sparse length
+    // to peers that haven't yet received it.
+    if (this.core !== null) {
+      const contig = this.core.header.contiguousLength
+
+      if (contig === this.core.tree.length) {
+        for (const peer of this.peers) {
+          if (peer.broadcastedNonSparse) continue
+
+          peer.broadcastRange(0, contig)
+        }
+      }
+    }
   }
 
   _onpeerupdate (added, peer) {
