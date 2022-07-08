@@ -1,6 +1,6 @@
 {
   "name": "hypercore",
-  "version": "10.0.0-alpha.49",
+  "version": "10.0.0-alpha.52",
   "description": "Hypercore 10",
   "main": "index.js",
   "scripts": {
@@ -32,7 +32,7 @@
     "lib/**.js"
   ],
   "dependencies": {
-    "@hyperswarm/secret-stream": "^5.2.0",
+    "@hyperswarm/secret-stream": "^6.0.0",
     "b4a": "^1.1.0",
     "big-sparse-array": "^1.0.2",
     "codecs": "^3.0.0",
@@ -48,7 +48,7 @@
     "safety-catch": "^1.0.1",
     "sodium-universal": "^3.0.4",
     "streamx": "^2.12.4",
-    "xache": "^1.0.0"
+    "xache": "^1.1.0"
   },
   "devDependencies": {
     "brittle": "^2.0.0",
