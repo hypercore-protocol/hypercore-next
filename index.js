@@ -545,6 +545,7 @@ module.exports = class Hypercore extends EventEmitter {
           if (peer.broadcastedNonSparse) continue
 
           peer.broadcastRange(0, contig)
+          peer.broadcastedNonSparse = true
         }
       }
     }
