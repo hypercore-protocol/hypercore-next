@@ -160,7 +160,11 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   static defaultStorage (storage, opts = {}) {
-    if (typeof storage !== 'string') return storage
+    if (typeof storage !== 'string') {
+      if (!isRandomAccessClass(storage)) return storage
+      const Cls = storage // just to satisfy standard...
+      return name => new Cls(name)
+    }
 
     const directory = storage
     const toLock = opts.lock || 'oplog'
@@ -855,6 +859,10 @@ function noop () {}
 
 function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
+}
+
+function isRandomAccessClass (fn) {
+  return !!(typeof fn === 'function' && fn.prototype && typeof fn.prototype.open === 'function')
 }
 
 function toHex (buf) {

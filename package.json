@@ -52,9 +52,9 @@
   },
   "devDependencies": {
     "brittle": "^2.0.0",
-    "hyperswarm": "next",
-    "random-access-memory": "^4.1.0",
-    "random-access-memory-overlay": "^1.0.0",
+    "hyperswarm": "^4.1.1",
+    "random-access-memory": "^5.0.0",
+    "random-access-memory-overlay": "^2.0.0",
     "standard": "^16.0.3",
     "tmp-promise": "^3.0.2"
   }
