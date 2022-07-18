@@ -496,12 +496,16 @@ module.exports = class Hypercore extends EventEmitter {
   _oncoreupdate (status, bitfield, value, from) {
     if (status !== 0) {
       const truncatedNonSparse = (status & 0b1000) !== 0
-      const appendedNonSparse = (status & 0b100) !== 0
-      const truncated = (status & 0b010) !== 0
-      const appended = (status & 0b001) !== 0
+      const appendedNonSparse = (status & 0b0100) !== 0
+      const truncated = (status & 0b0010) !== 0
+      const appended = (status & 0b0001) !== 0
 
       if (truncated) {
         this.replicator.ontruncate(bitfield.start)
+      }
+
+      if ((status & 0b0011) !== 0) {
+        this.replicator.onupgrade()
       }
 
       for (let i = 0; i < this.sessions.length; i++) {
@@ -522,10 +526,6 @@ module.exports = class Hypercore extends EventEmitter {
         if (s.sparse ? appended : appendedNonSparse) {
           s.emit('append')
         }
-      }
-
-      if ((status & 0b0011) !== 0) {
-        this.replicator.onupgrade()
       }
     }
 
