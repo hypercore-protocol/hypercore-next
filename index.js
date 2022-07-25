@@ -1,5 +1,5 @@
 const { EventEmitter } = require('events')
-const raf = require('random-access-file')
+const RAF = require('random-access-file')
 const isOptions = require('is-options')
 const hypercoreCrypto = require('hypercore-crypto')
 const c = require('compact-encoding')
@@ -8,8 +8,6 @@ const Xache = require('xache')
 const NoiseSecretStream = require('@hyperswarm/secret-stream')
 const Protomux = require('protomux')
 const codecs = require('codecs')
-
-const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 
 const Replicator = require('./lib/replicator')
 const Core = require('./lib/core')
@@ -162,14 +160,25 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   static defaultStorage (storage, opts = {}) {
-    if (typeof storage !== 'string') return storage
+    if (typeof storage !== 'string') {
+      if (!isRandomAccessClass(storage)) return storage
+      const Cls = storage // just to satisfy standard...
+      return name => new Cls(name)
+    }
+
     const directory = storage
     const toLock = opts.lock || 'oplog'
-    return function createFile (name) {
-      const locked = name === toLock || name.endsWith('/' + toLock)
-      const lock = locked ? fsctl.lock : null
-      const sparse = locked ? null : null // fsctl.sparse, disable sparse on windows - seems to fail for some people. TODO: investigate
-      return raf(name, { directory, lock, sparse })
+
+    return createFile
+
+    function createFile (name) {
+      const lock = isFile(name, toLock)
+      const sparse = isFile(name, 'data') || isFile(name, 'bitfield') || isFile(name, 'tree')
+      return new RAF(name, { directory, lock, sparse })
+    }
+
+    function isFile (name, n) {
+      return name === n || name.endsWith('/' + n)
     }
   }
 
@@ -303,8 +312,7 @@ module.exports = class Hypercore extends EventEmitter {
       crypto: this.crypto,
       legacy: opts.legacy,
       auth: opts.auth,
-      onupdate: this._oncoreupdate.bind(this),
-      oncontigupdate: this._oncorecontigupdate.bind(this)
+      onupdate: this._oncoreupdate.bind(this)
     })
 
     if (opts.userData) {
@@ -487,11 +495,17 @@ module.exports = class Hypercore extends EventEmitter {
 
   _oncoreupdate (status, bitfield, value, from) {
     if (status !== 0) {
-      const truncated = (status & 0b10) !== 0
-      const appended = (status & 0b01) !== 0
+      const truncatedNonSparse = (status & 0b1000) !== 0
+      const appendedNonSparse = (status & 0b0100) !== 0
+      const truncated = (status & 0b0010) !== 0
+      const appended = (status & 0b0001) !== 0
 
       if (truncated) {
         this.replicator.ontruncate(bitfield.start)
+      }
+
+      if ((status & 0b0011) !== 0) {
+        this.replicator.onupgrade()
       }
 
       for (let i = 0; i < this.sessions.length; i++) {
@@ -499,18 +513,32 @@ module.exports = class Hypercore extends EventEmitter {
 
         if (truncated) {
           if (s.cache) s.cache.clear()
-          s.emit('truncate', bitfield.start, this.core.tree.fork)
+
           // If snapshotted, make sure to update our compat so we can fail gets
           if (s._snapshot && bitfield.start < s._snapshot.compatLength) s._snapshot.compatLength = bitfield.start
         }
 
-        // For sparse sessions, immediately emit appends. Non-sparse sessions
-        // are handled separately and only emit appends when their contiguous
-        // length is updated.
-        if (appended && s.sparse) s.emit('append')
+        if (s.sparse ? truncated : truncatedNonSparse) {
+          s.emit('truncate', bitfield.start, this.core.tree.fork)
+        }
+
+        // For sparse sessions, immediately emit appends. If non-sparse, emit if contig length has updated
+        if (s.sparse ? appended : appendedNonSparse) {
+          s.emit('append')
+        }
       }
 
-      this.replicator.onupgrade()
+      const contig = this.core.header.contiguousLength
+
+      // When the contig length catches up, broadcast the non-sparse length to peers
+      if (appendedNonSparse && contig === this.core.tree.length) {
+        for (const peer of this.peers) {
+          if (peer.broadcastedNonSparse) continue
+
+          peer.broadcastRange(0, contig)
+          peer.broadcastedNonSparse = true
+        }
+      }
     }
 
     if (bitfield) {
@@ -522,31 +550,6 @@ module.exports = class Hypercore extends EventEmitter {
 
       for (let i = 0; i < this.sessions.length; i++) {
         this.sessions[i].emit('download', bitfield.start, byteLength, from)
-      }
-    }
-  }
-
-  _oncorecontigupdate () {
-    // For non-sparse sessions, emit appends only when the contiguous length is
-    // updated.
-    for (let i = 0; i < this.sessions.length; i++) {
-      const s = this.sessions[i]
-
-      if (!s.sparse) s.emit('append')
-    }
-
-    // When the contiguous length catches up, broadcast the non-sparse length
-    // to peers that haven't yet received it.
-    if (this.core !== null) {
-      const contig = this.core.header.contiguousLength
-
-      if (contig === this.core.tree.length) {
-        for (const peer of this.peers) {
-          if (peer.broadcastedNonSparse) continue
-
-          peer.broadcastRange(0, contig)
-          peer.broadcastedNonSparse = true
-        }
       }
     }
   }
@@ -865,12 +868,8 @@ function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
 }
 
-function requireMaybe (name) {
-  try {
-    return require(name)
-  } catch (_) {
-    return null
-  }
+function isRandomAccessClass (fn) {
+  return !!(typeof fn === 'function' && fn.prototype && typeof fn.prototype.open === 'function')
 }
 
 function toHex (buf) {
