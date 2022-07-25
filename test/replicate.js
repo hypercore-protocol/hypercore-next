@@ -783,6 +783,8 @@ test('non-sparse snapshot during partial replication', async function (t) {
 })
 
 test('sparse replication without gossiping', async function (t) {
+  t.plan(4)
+
   const a = await create()
   const b = await create(a.key)
 
