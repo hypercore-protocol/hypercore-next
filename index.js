@@ -684,18 +684,9 @@ module.exports = class Hypercore extends EventEmitter {
 
     if (start >= end) return
 
-    this.core.bitfield.setRange(start, end - start, false)
+    await this.core.clear(start, end)
 
-    start = this.core.bitfield.lastSet(start) + 1
-    end = this.core.bitfield.firstSet(end)
-
-    if (end === -1) end = this.core.tree.length
-
-    const offset = await this.core.tree.byteOffset(start * 2)
-    const [byteEnd, byteEndLength] = await this.core.tree.byteRange((end - 1) * 2)
-    const length = (byteEnd + byteEndLength) - offset
-
-    await this.core.blocks.clear(offset, length)
+    this.replicator.onhave(start, end - start, true)
   }
 
   async _get (index, opts) {
