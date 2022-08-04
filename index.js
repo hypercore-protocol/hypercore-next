@@ -685,8 +685,6 @@ module.exports = class Hypercore extends EventEmitter {
     if (start >= end) return
 
     await this.core.clear(start, end)
-
-    this.replicator.onhave(start, end - start, true)
   }
 
   async _get (index, opts) {
