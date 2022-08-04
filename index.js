@@ -673,33 +673,25 @@ module.exports = class Hypercore extends EventEmitter {
     return this._decode(encoding, block)
   }
 
-  async clear (start, end = null, opts) {
+  async clear (start, end = start + 1, opts) {
     if (this.opened === false) await this.opening
     if (this.closing !== null) throw SESSION_CLOSED()
 
     if (typeof end === 'object') {
       opts = end
-      end = null
+      end = start + 1
     }
 
-    let offset, length
+    if (start >= end) return
 
-    if (end === null) {
-      this.core.bitfield.set(start, false);
+    while (start > 0 && !this.core.bitfield.get(start - 1)) start--
+    while (end < this.core.tree.length && !this.core.bitfield.get(end)) end++
 
-      [offset, length] = await this.core.tree.byteRange(start * 2)
-    } else {
-      if (start >= end) return
+    this.core.bitfield.setRange(start, end - start, false)
 
-      this.core.bitfield.setRange(start, end - start, false)
-
-      offset = await this.core.tree.byteOffset(start * 2)
-      const [byteEnd, byteEndLength] = await this.core.tree.byteRange((end - 1) * 2)
-      length = (byteEnd + byteEndLength) - offset
-    }
-
-    // TODO: extend [offset, offset + length) to include adjacent empty blocks
-    //       to ensure that memory pages or file blocks are eventually unlinked
+    const offset = await this.core.tree.byteOffset(start * 2)
+    const [byteEnd, byteEndLength] = await this.core.tree.byteRange((end - 1) * 2)
+    const length = (byteEnd + byteEndLength) - offset
 
     await this.core.blocks.clear(offset, length)
   }
