@@ -673,6 +673,22 @@ module.exports = class Hypercore extends EventEmitter {
     return this._decode(encoding, block)
   }
 
+  async clear (start, end = start + 1, opts) {
+    if (this.opened === false) await this.opening
+    if (this.closing !== null) throw SESSION_CLOSED()
+
+    if (typeof end === 'object') {
+      opts = end
+      end = start + 1
+    }
+
+    if (start >= end) return
+
+    this.core.bitfield.setRange(start, end - start, false)
+
+    // TODO: clear storage, notify peers, etc.
+  }
+
   async _get (index, opts) {
     let block
 
