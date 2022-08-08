@@ -1,6 +1,6 @@
 const test = require('brittle')
 const b4a = require('b4a')
-const { create, replicate } = require('./helpers')
+const { create, replicate, eventFlush } = require('./helpers')
 
 test('clear', async function (t) {
   const a = await create()
@@ -51,7 +51,14 @@ test('clear + replication, gossip', async function (t) {
   t.ok(await a.has(1), 'a not cleared')
   t.absent(await b.has(1), 'b cleared')
 
-  await c.get(1)
+  let resolved = false
 
-  t.fail('c should not have downloaded')
+  const req = c.get(1)
+  req.then(() => (resolved = true))
+
+  await eventFlush()
+  t.absent(resolved, 'c not downloaded')
+
+  t.alike(await b.get(1), b4a.from('b'), 'b downloaded from a')
+  t.alike(await req, b4a.from('b'), 'c downloaded from b')
 })
