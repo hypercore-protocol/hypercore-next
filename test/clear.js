@@ -51,5 +51,7 @@ test('clear + replication, gossip', async function (t) {
   t.ok(await a.has(1), 'a not cleared')
   t.absent(await b.has(1), 'b cleared')
 
-  t.alike(await c.get(1), b4a.from('b'), 'c downloaded from a')
+  await c.get(1)
+
+  t.fail('c should not have downloaded')
 })
