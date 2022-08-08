@@ -1,4 +1,5 @@
 const test = require('brittle')
+const b4a = require('b4a')
 const { create, replicate } = require('./helpers')
 
 test('clear', async function (t) {
@@ -30,7 +31,7 @@ test('clear + replication', async function (t) {
   t.absent(await a.has(1), 'a cleared')
   t.ok(await b.has(1), 'b not cleared')
 
-  t.alike(await a.get(1), Buffer.from('b'), 'a downloaded from b')
+  t.alike(await a.get(1), b4a.from('b'), 'a downloaded from b')
 })
 
 test('clear + replication, gossip', async function (t) {
@@ -50,5 +51,5 @@ test('clear + replication, gossip', async function (t) {
   t.ok(await a.has(1), 'a not cleared')
   t.absent(await b.has(1), 'b cleared')
 
-  t.alike(await c.get(1), Buffer.from('b'), 'c downloaded from a')
+  t.alike(await c.get(1), b4a.from('b'), 'c downloaded from a')
 })
