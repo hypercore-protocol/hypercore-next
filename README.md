@@ -258,12 +258,6 @@ How many blocks of data are available on this core? If `sparse: false`, this wil
 
 Populated after `ready` has been emitted. Will be `0` before the event.
 
-#### `core.byteLength`
-
-How much data is available on this core in bytes? If `sparse: false`, this will equal `core.contiguousByteLength`.
-
-Populated after `ready` has been emitted. Will be `0` before the event.
-
 #### `core.contiguousLength`
 
 How many blocks are contiguously available starting from the first block of this core?
