@@ -1,5 +1,5 @@
 const { EventEmitter } = require('events')
-const raf = require('random-access-file')
+const RAF = require('random-access-file')
 const isOptions = require('is-options')
 const hypercoreCrypto = require('hypercore-crypto')
 const c = require('compact-encoding')
@@ -8,8 +8,6 @@ const Xache = require('xache')
 const NoiseSecretStream = require('@hyperswarm/secret-stream')
 const Protomux = require('protomux')
 const codecs = require('codecs')
-
-const fsctl = requireMaybe('fsctl') || { lock: noop, sparse: noop }
 
 const Replicator = require('./lib/replicator')
 const Core = require('./lib/core')
@@ -67,9 +65,12 @@ module.exports = class Hypercore extends EventEmitter {
     this.opened = false
     this.closed = false
     this.snapshotted = !!opts.snapshot
+    this.sparse = opts.sparse !== false
     this.sessions = opts._sessions || [this]
     this.auth = opts.auth || null
     this.autoClose = !!opts.autoClose
+    this.onwait = opts.onwait || null
+    this.wait = opts.wait !== false
 
     this.closing = null
     this.opening = this._openSession(key, storage, opts)
@@ -113,6 +114,7 @@ module.exports = class Hypercore extends EventEmitter {
       indent + '  opened: ' + opts.stylize(this.opened, 'boolean') + '\n' +
       indent + '  closed: ' + opts.stylize(this.closed, 'boolean') + '\n' +
       indent + '  snapshotted: ' + opts.stylize(this.snapshotted, 'boolean') + '\n' +
+      indent + '  sparse: ' + opts.stylize(this.sparse, 'boolean') + '\n' +
       indent + '  writable: ' + opts.stylize(this.writable, 'boolean') + '\n' +
       indent + '  length: ' + opts.stylize(this.length, 'number') + '\n' +
       indent + '  fork: ' + opts.stylize(this.fork, 'number') + '\n' +
@@ -151,7 +153,6 @@ module.exports = class Hypercore extends EventEmitter {
       }
       if (opts.keepAlive !== false) {
         noiseStream.setKeepAlive(5000)
-        noiseStream.setTimeout(10000)
       }
       noiseStream.userData = protocol
     }
@@ -160,14 +161,25 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   static defaultStorage (storage, opts = {}) {
-    if (typeof storage !== 'string') return storage
+    if (typeof storage !== 'string') {
+      if (!isRandomAccessClass(storage)) return storage
+      const Cls = storage // just to satisfy standard...
+      return name => new Cls(name)
+    }
+
     const directory = storage
     const toLock = opts.lock || 'oplog'
-    return function createFile (name) {
-      const locked = name === toLock || name.endsWith('/' + toLock)
-      const lock = locked ? fsctl.lock : null
-      const sparse = locked ? null : null // fsctl.sparse, disable sparse on windows - seems to fail for some people. TODO: investigate
-      return raf(name, { directory, lock, sparse })
+
+    return createFile
+
+    function createFile (name) {
+      const lock = isFile(name, toLock)
+      const sparse = isFile(name, 'data') || isFile(name, 'bitfield') || isFile(name, 'tree')
+      return new RAF(name, { directory, lock, sparse })
+    }
+
+    function isFile (name, n) {
+      return name === n || name.endsWith('/' + n)
     }
   }
 
@@ -182,28 +194,27 @@ module.exports = class Hypercore extends EventEmitter {
       throw SESSION_CLOSED('Cannot make sessions on a closing core')
     }
 
+    const sparse = opts.sparse === false ? false : this.sparse
+    const wait = opts.wait === false ? false : this.wait
+    const onwait = opts.onwait === undefined ? this.onwait : opts.onwait
     const Clz = opts.class || Hypercore
     const s = new Clz(this.storage, this.key, {
       ...opts,
+      sparse,
+      wait,
+      onwait,
       _opening: this.opening,
       _sessions: this.sessions
     })
 
     s._passCapabilities(this)
 
-    // Pass on the cache unless explicitly disabled.
-    if (opts.cache !== false) s.cache = this.cache
-
-    if (opts.encryptionKey) {
-      // Only override the block encryption if its either not already set or if
-      // the caller provided a different key.
-      if (
-        !s.encryption ||
-        !b4a.equals(s.encryption.key, opts.encryptionKey)
-      ) {
-        s.encryption = new BlockEncryption(opts.encryptionKey, s.key)
-      }
+    // Configure the cache unless explicitly disabled.
+    if (opts.cache !== false) {
+      s.cache = opts.cache === true || !opts.cache ? this.cache : opts.cache
     }
+
+    ensureEncryption(s, opts)
 
     this.sessions.push(s)
 
@@ -231,6 +242,8 @@ module.exports = class Hypercore extends EventEmitter {
     this.sessions = from.sessions
     this.storage = from.storage
     this.replicator.findingPeers += this._findingPeers
+
+    ensureEncryption(this, opts)
 
     this.sessions.push(this)
   }
@@ -277,6 +290,9 @@ module.exports = class Hypercore extends EventEmitter {
     if (opts.encodeBatch) {
       this.encodeBatch = opts.encodeBatch
     }
+
+    // Start continous replication if not in sparse mode.
+    if (!this.sparse) this.download({ start: 0, end: -1 })
 
     // This is a hidden option that's only used by Corestore.
     // It's required so that corestore can load a name from userData before 'ready' is emitted.
@@ -325,14 +341,27 @@ module.exports = class Hypercore extends EventEmitter {
     }
   }
 
+  _getSnapshot () {
+    if (this.sparse) {
+      return {
+        length: this.core.tree.length,
+        byteLength: this.core.tree.byteLength,
+        fork: this.core.tree.fork,
+        compatLength: this.core.tree.length
+      }
+    }
+
+    return {
+      length: this.core.header.contiguousLength,
+      byteLength: 0,
+      fork: this.core.tree.fork,
+      compatLength: this.core.header.contiguousLength
+    }
+  }
+
   _updateSnapshot () {
     const prev = this._snapshot
-    const next = this._snapshot = {
-      length: this.core.tree.length,
-      byteLength: this.core.tree.byteLength,
-      fork: this.core.tree.fork,
-      compatLength: this.core.tree.length
-    }
+    const next = this._snapshot = this._getSnapshot()
 
     if (!prev) return true
     return prev.length !== next.length || prev.fork !== next.fork
@@ -418,13 +447,25 @@ module.exports = class Hypercore extends EventEmitter {
   }
 
   get length () {
-    return this._snapshot
-      ? this._snapshot.length
-      : (this.core === null ? 0 : this.core.tree.length)
+    if (this._snapshot) return this._snapshot.length
+    if (this.core === null) return 0
+    if (!this.sparse) return this.contiguousLength
+    return this.core.tree.length
+  }
+
+  get byteLength () {
+    if (this._snapshot) return this._snapshot.byteLength
+    if (this.core === null) return 0
+    if (!this.sparse) return this.contiguousByteLength
+    return this.core.tree.byteLength - (this.core.tree.length * this.padding)
   }
 
   get contiguousLength () {
     return this.core === null ? 0 : this.core.header.contiguousLength
+  }
+
+  get contiguousByteLength () {
+    return 0
   }
 
   get fork () {
@@ -457,11 +498,17 @@ module.exports = class Hypercore extends EventEmitter {
 
   _oncoreupdate (status, bitfield, value, from) {
     if (status !== 0) {
-      const truncated = (status & 0b10) !== 0
-      const appended = (status & 0b01) !== 0
+      const truncatedNonSparse = (status & 0b1000) !== 0
+      const appendedNonSparse = (status & 0b0100) !== 0
+      const truncated = (status & 0b0010) !== 0
+      const appended = (status & 0b0001) !== 0
 
       if (truncated) {
         this.replicator.ontruncate(bitfield.start)
+      }
+
+      if ((status & 0b0011) !== 0) {
+        this.replicator.onupgrade()
       }
 
       for (let i = 0; i < this.sessions.length; i++) {
@@ -469,17 +516,32 @@ module.exports = class Hypercore extends EventEmitter {
 
         if (truncated) {
           if (s.cache) s.cache.clear()
-          s.emit('truncate', bitfield.start, this.core.tree.fork)
+
           // If snapshotted, make sure to update our compat so we can fail gets
           if (s._snapshot && bitfield.start < s._snapshot.compatLength) s._snapshot.compatLength = bitfield.start
         }
 
-        if (appended) {
+        if (s.sparse ? truncated : truncatedNonSparse) {
+          s.emit('truncate', bitfield.start, this.core.tree.fork)
+        }
+
+        // For sparse sessions, immediately emit appends. If non-sparse, emit if contig length has updated
+        if (s.sparse ? appended : appendedNonSparse) {
           s.emit('append')
         }
       }
 
-      this.replicator.onupgrade()
+      const contig = this.core.header.contiguousLength
+
+      // When the contig length catches up, broadcast the non-sparse length to peers
+      if (appendedNonSparse && contig === this.core.tree.length) {
+        for (const peer of this.peers) {
+          if (peer.broadcastedNonSparse) continue
+
+          peer.broadcastRange(0, contig)
+          peer.broadcastedNonSparse = true
+        }
+      }
     }
 
     if (bitfield) {
@@ -557,10 +619,22 @@ module.exports = class Hypercore extends EventEmitter {
     const activeRequests = (opts && opts.activeRequests) || this.activeRequests
     const req = this.replicator.addUpgrade(activeRequests)
 
-    if (!this.snapshotted) return req.promise
-    if (!(await req.promise)) return false
+    let upgraded = await req.promise
 
-    return this._updateSnapshot()
+    if (!this.sparse) {
+      // Download all available blocks in non-sparse mode
+      const start = this.length
+      const end = this.core.tree.length
+      const contig = this.contiguousLength
+
+      await this.download({ start, end, ifAvailable: true }).downloaded()
+
+      if (!upgraded) upgraded = this.contiguousLength !== contig
+    }
+
+    if (!upgraded) return false
+    if (this.snapshotted) return this._updateSnapshot()
+    return true
   }
 
   async seek (bytes, opts) {
@@ -608,29 +682,41 @@ module.exports = class Hypercore extends EventEmitter {
     return this._decode(encoding, block)
   }
 
+  async clear (start, end = start + 1, opts) {
+    if (this.opened === false) await this.opening
+    if (this.closing !== null) throw SESSION_CLOSED()
+
+    if (typeof end === 'object') {
+      opts = end
+      end = start + 1
+    }
+
+    if (start >= end) return
+
+    await this.core.clear(start, end)
+  }
+
   async _get (index, opts) {
-    let req
+    let block
 
     if (this.core.bitfield.get(index)) {
-      req = this.core.blocks.get(index)
+      block = this.core.blocks.get(index)
 
-      if (this.cache) this.cache.set(index, req)
+      if (this.cache) this.cache.set(index, block)
     } else {
       if (opts && opts.wait === false) return null
-      if (opts && opts.onwait) opts.onwait(index)
+      if (this.wait === false && (!opts || !opts.wait)) return null
+      if (opts && opts.onwait) opts.onwait(index, this)
+      if (this.onwait) this.onwait(index, this)
 
       const activeRequests = (opts && opts.activeRequests) || this.activeRequests
 
-      req = this._cacheOnResolve(
-        index,
-        this.replicator
-          .addBlock(activeRequests, index)
-          .promise,
-        this.core.tree.fork
-      )
+      const req = this.replicator.addBlock(activeRequests, index)
+
+      block = this._cacheOnResolve(index, req.promise, this.core.tree.fork)
     }
 
-    return req
+    return block
   }
 
   async _cacheOnResolve (index, req, fork) {
@@ -671,7 +757,9 @@ module.exports = class Hypercore extends EventEmitter {
 
   async _download (range) {
     if (this.opened === false) await this.opening
+
     const activeRequests = (range && range.activeRequests) || this.activeRequests
+
     return this.replicator.addRange(activeRequests, range)
   }
 
@@ -804,12 +892,8 @@ function isStream (s) {
   return typeof s === 'object' && s && typeof s.pipe === 'function'
 }
 
-function requireMaybe (name) {
-  try {
-    return require(name)
-  } catch (_) {
-    return null
-  }
+function isRandomAccessClass (fn) {
+  return !!(typeof fn === 'function' && fn.prototype && typeof fn.prototype.open === 'function')
 }
 
 function toHex (buf) {
@@ -823,4 +907,12 @@ function preappend (blocks) {
   for (let i = 0; i < blocks.length; i++) {
     this.encryption.encrypt(offset + i, blocks[i], fork)
   }
+}
+
+function ensureEncryption (core, opts) {
+  if (!opts.encryptionKey) return
+  // Only override the block encryption if its either not already set or if
+  // the caller provided a different key.
+  if (core.encryption && b4a.equals(core.encryption.key, opts.encryptionKey)) return
+  core.encryption = new BlockEncryption(opts.encryptionKey, core.key)
 }
