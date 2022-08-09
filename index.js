@@ -453,6 +453,9 @@ module.exports = class Hypercore extends EventEmitter {
     return this.core.tree.length
   }
 
+  /**
+   * Deprecated. Use `const { byteLength } = await core.info()`.
+   */
   get byteLength () {
     if (this._snapshot) return this._snapshot.byteLength
     if (this.core === null) return 0
