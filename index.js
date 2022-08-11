@@ -630,8 +630,8 @@ module.exports = class Hypercore extends EventEmitter {
 
         this._postupgradeLength = Promise.resolve(this._preupgrade(latest))
         this._postupgradeLength
-          .then(() => latest.close())
           .catch(noop)
+          .then(() => latest.close())
       }
 
       const length = await this._postupgradeLength
