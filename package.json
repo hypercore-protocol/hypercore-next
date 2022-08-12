@@ -4,7 +4,8 @@
   "description": "Hypercore 10",
   "main": "index.js",
   "scripts": {
-    "test": "standard && brittle test/*.js"
+    "test": "standard && node test/all.js",
+    "test:generate": "brittle -r test/all.js test/*.js"
   },
   "repository": {
     "type": "git",
@@ -52,7 +53,7 @@
     "xache": "^1.1.0"
   },
   "devDependencies": {
-    "brittle": "^2.0.0",
+    "brittle": "next",
     "hyperswarm": "^4.1.1",
     "random-access-memory": "^5.0.0",
     "random-access-memory-overlay": "^2.0.0",
