@@ -634,9 +634,26 @@ module.exports = class Hypercore extends EventEmitter {
       if (!upgraded) upgraded = this.contiguousLength !== contig
     }
 
+    if (opts && typeof opts.minLength === 'number') {
+      await this.waitForLength(opts.minLength)
+    }
+
     if (!upgraded) return false
     if (this.snapshotted) return this._updateSnapshot()
     return true
+  }
+
+  waitForLength (minLength = 0) {
+    return new Promise(resolve => {
+      if (this.length >= minLength) return resolve(this.length)
+      const onAppend = () => {
+        if (this.length >= minLength) {
+          this.removeListener('append', onAppend)
+          resolve(this.length)
+        }
+      }
+      this.on('append', onAppend)
+    })
   }
 
   async seek (bytes, opts) {

@@ -840,3 +840,55 @@ test('sparse replication without gossiping', async function (t) {
     t.alike(await c.seek(4), [4, 0])
   })
 })
+
+test('sparse update with minLength', async function (t) {
+  const a = await create()
+  const b = await create(a.key)
+  replicate(a, b, t)
+
+  await a.append(['1', '2'])
+  await b.update()
+  t.is(b.length, 2)
+
+  const updateLength5 = t.test('updateLength5')
+  updateLength5.plan(1)
+
+  b.update({ minLength: 5 }).then(() => {
+    updateLength5.pass()
+  })
+
+  await a.append(['3'])
+  await eventFlush()
+  await a.append(['4'])
+  await eventFlush()
+  await a.append(['5'])
+
+  await updateLength5
+  t.is(b.length, 5)
+})
+
+test('non-sparse update with minLength', async function (t) {
+  const a = await create()
+  const b = await create(a.key, { sparse: false })
+  replicate(a, b, t)
+
+  await a.append(['1', '2'])
+  await b.update()
+  t.is(b.length, 2)
+
+  const updateLength5 = t.test('updateLength5')
+  updateLength5.plan(1)
+
+  b.update({ minLength: 5 }).then(() => {
+    updateLength5.pass()
+  })
+
+  await a.append(['3'])
+  await eventFlush()
+  await a.append(['4'])
+  await eventFlush()
+  await a.append(['5'])
+
+  await updateLength5
+  t.is(b.length, 5)
+})
