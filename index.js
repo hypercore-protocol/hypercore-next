@@ -11,6 +11,7 @@ const Protomux = require('protomux')
 const Replicator = require('./lib/replicator')
 const Core = require('./lib/core')
 const BlockEncryption = require('./lib/block-encryption')
+const Info = require('./lib/info')
 const { ReadStream, WriteStream } = require('./lib/streams')
 const { BAD_ARGUMENT, SESSION_CLOSED, SESSION_NOT_WRITABLE, SNAPSHOT_NOT_AVAILABLE } = require('./lib/errors')
 
@@ -68,6 +69,7 @@ module.exports = class Hypercore extends EventEmitter {
     this.auth = opts.auth || null
     this.autoClose = !!opts.autoClose
     this.onwait = opts.onwait || null
+    this.wait = opts.wait !== false
 
     this.closing = null
     this.opening = this._openSession(key, storage, opts)
@@ -114,7 +116,6 @@ module.exports = class Hypercore extends EventEmitter {
       indent + '  sparse: ' + opts.stylize(this.sparse, 'boolean') + '\n' +
       indent + '  writable: ' + opts.stylize(this.writable, 'boolean') + '\n' +
       indent + '  length: ' + opts.stylize(this.length, 'number') + '\n' +
-      indent + '  byteLength: ' + opts.stylize(this.byteLength, 'number') + '\n' +
       indent + '  fork: ' + opts.stylize(this.fork, 'number') + '\n' +
       indent + '  sessions: [ ' + opts.stylize(this.sessions.length, 'number') + ' ]\n' +
       indent + '  activeRequests: [ ' + opts.stylize(this.activeRequests.length, 'number') + ' ]\n' +
@@ -193,11 +194,13 @@ module.exports = class Hypercore extends EventEmitter {
     }
 
     const sparse = opts.sparse === false ? false : this.sparse
+    const wait = opts.wait === false ? false : this.wait
     const onwait = opts.onwait === undefined ? this.onwait : opts.onwait
     const Clz = opts.class || Hypercore
     const s = new Clz(this.storage, this.key, {
       ...opts,
       sparse,
+      wait,
       onwait,
       _opening: this.opening,
       _sessions: this.sessions
@@ -449,6 +452,9 @@ module.exports = class Hypercore extends EventEmitter {
     return this.core.tree.length
   }
 
+  /**
+   * Deprecated. Use `const { byteLength } = await core.info()`.
+   */
   get byteLength () {
     if (this._snapshot) return this._snapshot.byteLength
     if (this.core === null) return 0
@@ -596,6 +602,12 @@ module.exports = class Hypercore extends EventEmitter {
     }
   }
 
+  async info () {
+    if (this.opened === false) await this.opening
+
+    return Info.from(this.core, this.padding, this._snapshot)
+  }
+
   async update (opts) {
     if (this.opened === false) await this.opening
     if (this.closing !== null) return false
@@ -672,6 +684,20 @@ module.exports = class Hypercore extends EventEmitter {
     return this._decode(encoding, block)
   }
 
+  async clear (start, end = start + 1, opts) {
+    if (this.opened === false) await this.opening
+    if (this.closing !== null) throw SESSION_CLOSED()
+
+    if (typeof end === 'object') {
+      opts = end
+      end = start + 1
+    }
+
+    if (start >= end) return
+
+    await this.core.clear(start, end)
+  }
+
   async _get (index, opts) {
     let block
 
@@ -681,6 +707,7 @@ module.exports = class Hypercore extends EventEmitter {
       if (this.cache) this.cache.set(index, block)
     } else {
       if (opts && opts.wait === false) return null
+      if (this.wait === false && (!opts || !opts.wait)) return null
       if (opts && opts.onwait) opts.onwait(index, this)
       if (this.onwait) this.onwait(index, this)
 

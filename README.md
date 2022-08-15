@@ -75,10 +75,10 @@ You can also set valueEncoding to any [abstract-encoding](https://github.com/maf
 
 valueEncodings will be applied to individually blocks, even if you append batches. If you want to control encoding at the batch-level, you can use the `encodeBatch` option, which is a function that takes a batch and returns a binary-encoded batch. If you provide a custom valueEncoding, it will not be applied prior to `encodeBatch`.
 
-#### `const seq = await core.append(block)`
+#### `const { length, byteLength } = await core.append(block)`
 
 Append a block of data (or an array of blocks) to the core.
-Returns the seq the first block was stored at.
+Returns the new length and byte length of the core.
 
 #### `const block = await core.get(index, [options])`
 
@@ -179,6 +179,23 @@ const updated = await core.update()
 console.log('core was updated?', updated, 'length is', core.length)
 ```
 
+#### `const info = await core.info()`
+
+Get information about this core, such as its total size in bytes.
+
+The object will look like this:
+
+```js
+Info {
+  key: Buffer(...),
+  length: 18,
+  contiguousLength: 16,
+  byteLength: 742,
+  fork: 0,
+  padding: 8
+}
+```
+
 #### `await core.close()`
 
 Fully close this core.
@@ -238,12 +255,6 @@ Buffer containing the optional block encryption key of this core. Will be `null`
 #### `core.length`
 
 How many blocks of data are available on this core? If `sparse: false`, this will equal `core.contiguousLength`.
-
-Populated after `ready` has been emitted. Will be `0` before the event.
-
-#### `core.byteLength`
-
-How much data is available on this core in bytes? If `sparse: false`, this will equal `core.contiguousByteLength`.
 
 Populated after `ready` has been emitted. Will be `0` before the event.
 
